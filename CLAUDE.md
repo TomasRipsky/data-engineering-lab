@@ -31,7 +31,7 @@ Chat in Spanish. Code, commits, READMEs, ADRs and the second brain in English.
 - Commits: Conventional Commits with project scope — `feat(marineflow): ...`; lab-level scope is `lab`.
 - Release: (1) branch `chore/<issue#>-release-vX.Y.Z` from `dev` moves CHANGELOG `[Unreleased]` → `[X.Y.Z]`, PR into `dev`; (2) PR `dev → main` titled `release: vX.Y.Z`, **merge commit**; (3) `gh release create vX.Y.Z --target main`.
 - I never merge a PR or cut a release without Tomas's OK.
-- Before merging a non-trivial PR, run the `pr-reviewer` agent (`.claude/agents/`) and fix its Critical/Important findings.
+- Before merging a non-trivial PR, check out its branch and run the `pr-reviewer` agent (`.claude/agents/`); fix its Critical/Important findings. Its Bash is hook-restricted to read-only commands.
 
 ## Conventions
 - Python: `uv` for envs/deps, `ruff` for lint+format, `pytest` for tests. Python ≥ 3.12.
