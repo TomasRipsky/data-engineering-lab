@@ -5,18 +5,26 @@ description: Start a new data engineering project in this lab — creates the Gi
 
 # New project
 
-## 1. Name
+## 1. Name (validate before touching GitHub)
 Ask for (or confirm) a kebab-case name and a one-line pitch.
-Validate: `[[ "$NAME" =~ ^[a-z][a-z0-9-]*$ ]]` — reject otherwise (no leading digit, no underscores, no uppercase).
-Derive `PKG="${NAME//-/_}"`. Stop if `projects/$NAME` already exists.
+```bash
+[[ "$NAME" =~ ^[a-z][a-z0-9]*(-[a-z0-9]+)*$ ]] || { echo "invalid name: $NAME"; exit 1; }
+PKG="${NAME//-/_}"
+python3 -c "import keyword,sys; n=sys.argv[1]; sys.exit(keyword.iskeyword(n) or n in sys.stdlib_module_names)" "$PKG" \
+  || { echo "$PKG clashes with a Python keyword or stdlib module"; exit 1; }
+[[ -e "projects/$NAME" ]] && { echo "projects/$NAME already exists"; exit 1; }
+```
+Also reject names equal to a planned dependency (e.g. `pytest`, `pandas`) — ask Tomas for another.
 
 ## 2. Issue and branch
 ```bash
 git switch dev && git pull --ff-only
 gh label create "project:$NAME" --color 0E8A16 --description "Project $NAME" 2>/dev/null || true
-ISSUE=$(gh issue create --title "feat($NAME): bootstrap project" \
+URL=$(gh issue create --title "feat($NAME): bootstrap project" \
   --label "type:feat,project:$NAME" \
-  --body "Bootstrap \`projects/$NAME\` from the template. Pitch: $PITCH" | grep -oE '[0-9]+$')
+  --body "Bootstrap \`projects/$NAME\` from the template. Pitch: $PITCH") || { echo "issue creation failed"; exit 1; }
+ISSUE=${URL##*/}
+[[ "$ISSUE" =~ ^[0-9]+$ ]] || { echo "unexpected gh output: $URL"; exit 1; }
 git switch -c "feat/$ISSUE-$NAME-bootstrap"
 ```
 
@@ -26,14 +34,26 @@ rsync -a --exclude .venv --exclude .pytest_cache --exclude .ruff_cache --exclude
   projects/_template/ "projects/$NAME/"
 mv "projects/$NAME/src/template_project" "projects/$NAME/src/$PKG"
 grep -rl --exclude-dir=.venv -e template-project -e template_project -e '# Project Name' "projects/$NAME" \
-  | xargs sed -i '' -e "s/template-project/$NAME/g" -e "s/template_project/$PKG/g" -e "s/^# Project Name$/# $NAME/"
+  | xargs perl -pi -e "s/template-project/$NAME/g; s/template_project/$PKG/g; s/^# Project Name\$/# $NAME/"
+```
+Then fill the placeholders with the Edit tool (not sed — the pitch may contain `/`, `&` or `|`):
+- `projects/$NAME/README.md`: the `> One-sentence pitch...` line → `> $PITCH`.
+- `projects/$NAME/pyproject.toml`: `description = "..."` → the pitch.
+- `projects/$NAME/src/$PKG/__init__.py`: docstring → `"""$NAME: <pitch>."""`.
+
+```bash
 (cd "projects/$NAME" && uv sync && uv run pytest && uv run ruff check .)
 ```
 All three must pass before continuing.
 
 ## 4. Register
-- Append a row to the `## Projects` table in the root `README.md`: `| [$NAME](projects/$NAME/) | $PITCH | TBD | 🌱 bootstrapped |`.
-- Create `~/Data Engineering/Second Brain/07 - Laboratory/$NAME.md` from `09 - Templates/Project Template.md` (fill Problem/Goal from the pitch; add the repo path).
+- Append a row to the `## Projects` table in the root `README.md` (escape `|` in the pitch as `\|`): `| [$NAME](projects/$NAME/) | $PITCH | TBD | 🌱 bootstrapped |`.
+- Create the vault note from `09 - Templates/Project Template.md` (fill Problem/Goal from the pitch; add the repo path) and version it:
+```bash
+VAULT="$HOME/Data Engineering/Second Brain"
+# write "$VAULT/07 - Laboratory/$NAME.md" with the Write tool, then:
+git -C "$VAULT" add "07 - Laboratory/$NAME.md" && git -C "$VAULT" commit -m "docs: add $NAME project note" && git -C "$VAULT" push
+```
 
 ## 5. Commit and PR
 ```bash

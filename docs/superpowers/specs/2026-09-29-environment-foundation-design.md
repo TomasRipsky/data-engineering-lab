@@ -1,7 +1,7 @@
 # Environment Foundation — Design
 
 - **Date:** 2026-09-29
-- **Status:** Revision 2 — approved in conversation, pending written-spec review
+- **Status:** Implemented in v0.1.0 (revision 2). Later decisions live in `docs/adr/`.
 - **Scope:** Initial setup of the `data-engineering-lab` monorepo, the Git workflow, Claude's identity and long-term memory, and the Obsidian second brain. No data projects yet.
 
 ## 1. Intent
@@ -38,7 +38,7 @@ data-engineering-lab/                 # GitHub: TomasRipsky/data-engineering-lab
 ├── README.md                         # Portfolio front page + project index
 ├── CHANGELOG.md                      # Updated on each release (dev → main)
 ├── .claude/
-│   ├── settings.json                 # Plugins, permissions, additionalDirectories (vault)
+│   ├── settings.json                 # Plugins, permissions (vault path lives in git-ignored settings.local.json)
 │   └── skills/new-project/SKILL.md   # The only custom skill for now
 ├── .github/
 │   ├── pull_request_template.md
@@ -123,7 +123,7 @@ Three tiers; what is always loaded stays small, what grows is read on demand.
 - **Source:** existing vault `~/Downloads/Obsidian_Data_Engineering_Second_Brain` (30 notes, numbered areas, templates, EN).
 - **Move to:** `~/Data Engineering/Second Brain/` (Downloads is not a durable location). Tomas re-opens it in Obsidian from the new path.
 - **Versioning:** its own private repo `TomasRipsky/second-brain`; `.gitignore` excludes `.obsidian/workspace*.json` and caches.
-- **Access:** added to `permissions.additionalDirectories` in `.claude/settings.json`.
+- **Access:** added to `permissions.additionalDirectories` in the git-ignored `.claude/settings.local.json` (machine-specific path).
 - **Flow:** new concepts met in projects are created/enriched with the vault's Concept Template; project READMEs link vault notes; `07 - Laboratory` notes link back to projects.
 - No Obsidian plugins required now.
 

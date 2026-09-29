@@ -26,15 +26,25 @@ htmlcov/
 *credentials*.json
 *service-account*.json
 *.tfvars
+*.tfvars.json
 !*.tfvars.example
+.envrc
+*.p8
+*.p12
+*.pfx
+kubeconfig
+.databrickscfg
+# dbt: commit profiles.yml.example that uses env_var(); never the real one
+profiles.yml
 
 # Terraform (keep .terraform.lock.hcl committed)
 .terraform/
 *.tfstate
 *.tfstate.*
 
-# Local data
-data/
+# Local data (anchored: nested src/<pkg>/data or tests/data stay tracked)
+/data/
+projects/*/data/
 *.duckdb
 *.duckdb.wal
 

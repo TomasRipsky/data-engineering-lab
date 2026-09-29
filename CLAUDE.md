@@ -25,11 +25,11 @@ Chat in Spanish. Code, commits, READMEs, ADRs and the second brain in English.
 - Cloud infra lives inside the project: `projects/<p>/infra/<cloud>/` (Terraform). Extract to `shared/` only when two projects duplicate it.
 
 ## Git workflow
-- `main` = released history (protected). `dev` = stable integration (protected). Never commit or push to either directly.
+- `main` = released history (protected). `dev` = stable integration (protected, **default branch**). Never commit or push to either directly.
 - Work branches from `dev`: `<type>/<issue#>-<slug>`; types `feat fix docs refactor test chore ci infra`.
 - Every change starts from an **issue**; the PR into `dev` says `Closes #n` and is **squash-merged**.
 - Commits: Conventional Commits with project scope — `feat(marineflow): ...`; lab-level scope is `lab`.
-- Release: PR `dev → main` titled `release: vX.Y.Z`, **merge commit**, tag `vX.Y.Z`, CHANGELOG updated first.
+- Release: (1) branch `chore/<issue#>-release-vX.Y.Z` from `dev` moves CHANGELOG `[Unreleased]` → `[X.Y.Z]`, PR into `dev`; (2) PR `dev → main` titled `release: vX.Y.Z`, **merge commit**; (3) `gh release create vX.Y.Z --target main`.
 - I never merge a PR or cut a release without Tomas's OK.
 
 ## Conventions
@@ -37,9 +37,11 @@ Chat in Spanish. Code, commits, READMEs, ADRs and the second brain in English.
 - SQL: lowercase keywords, CTEs over nested subqueries, one model = one grain (state it).
 - Terraform: one root module per cloud per project; remote state only when shared.
 - Config via environment variables; `.env.example` documents them.
+- Library/cloud APIs change fast: check current docs via the Context7 MCP (`.mcp.json`) before relying on memory.
 
 ## Security & cost (this repo is public)
 - Secrets never enter the repo. gitleaks runs on every commit; only `.env.example` is committed.
+- On any fresh clone or new machine, run `pre-commit install` before the first commit — without it no hook runs.
 - Never read or print `.env` files or credentials.
 - Cloud labs: free tier first, budget alert set before first deploy, `make destroy` implemented and tested before anything is left running. Tell Tomas the expected cost before creating billable resources.
 

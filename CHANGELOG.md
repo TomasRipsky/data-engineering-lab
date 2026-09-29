@@ -5,6 +5,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-29
+
+### Added
+- Project-scoped Context7 MCP (`.mcp.json`) for up-to-date library and cloud docs.
+
+### Changed
+- `dev` is now the default branch so `Closes #n` auto-closes issues on merge.
+- Release recipe clarified (CHANGELOG via PR, `gh release create --target main`).
+
+### Fixed
+- Nested `data/` folders are no longer git-ignored; more secret file shapes are ignored.
+- `/new-project`: fails fast on `gh` errors, stricter name validation, portable `perl` rename, fills placeholders, versions the vault note.
+- Claude can read `.env.example` again; real `.env` files stay denied.
+- `pre-commit install` documented for fresh clones.
+
 ## [0.1.0] - 2026-09-29
 
 ### Added
