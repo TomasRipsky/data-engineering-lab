@@ -58,12 +58,22 @@ class Season:
 
 
 def refresh_season(client: OpenF1Client, lake: Lake, year: int, now: datetime) -> Season:
-    """Fetch and store the season-level files (meetings, sessions)."""
-    meetings = client.get("meetings", year=year)
-    sessions = client.get("sessions", year=year)
-    lake.write_table(season_file("meetings", year), to_table("meetings", meetings, now))
-    lake.write_table(season_file("sessions", year), to_table("sessions", sessions, now))
-    return Season(year, meetings, sessions)
+    """Fetch and store the season-level files (meetings, sessions).
+
+    An empty answer never replaces a stored file: the loader reloads season files in full, so
+    one flaky "No results" would otherwise wipe every session from the warehouse.
+    """
+    rows = {endpoint: client.get(endpoint, year=year) for endpoint in ("meetings", "sessions")}
+    for endpoint, records in rows.items():
+        if records:
+            lake.write_table(season_file(endpoint, year), to_table(endpoint, records, now))
+        else:
+            log.warning(
+                "%s for %s: no rows from OpenF1; stored file left untouched",
+                endpoint,
+                year,
+            )
+    return Season(year, rows["meetings"], rows["sessions"])
 
 
 def ingest_meeting(

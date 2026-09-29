@@ -118,3 +118,14 @@ def test_latest_fails_loudly_when_a_meeting_stays_without_data(make_client, open
     assert ingest_latest(client, lake, two_days_after) == []  # may still arrive: just wait
     with pytest.raises(RuntimeError, match="1255"):
         ingest_latest(client, lake, NOW)  # 9 days after the race: someone must look
+
+
+def test_empty_season_response_keeps_the_previous_season_file(fixture_client, make_client, lake):
+    ingest_one(fixture_client, lake, 1255, NOW)
+    before = lake.read_table(season_file("sessions", 2025)).num_rows
+
+    def empty(request):
+        return httpx.Response(404, json=NO_RESULTS)
+
+    ingest_season(make_client(empty), lake, 2025, NOW)
+    assert lake.read_table(season_file("sessions", 2025)).num_rows == before > 0
