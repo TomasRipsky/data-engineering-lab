@@ -44,14 +44,20 @@ class Lake:
     def __init__(self, uri: str) -> None:
         self.uri = uri
         self._fs, self._root = _resolve(uri.rstrip("/"))
+        self.is_local = isinstance(self._fs, fs.LocalFileSystem)
 
     def _path(self, rel: str) -> str:
         return f"{self._root}/{rel}"
 
     def _prepare(self, rel: str) -> str:
         path = self._path(rel)
-        self._fs.create_dir(path.rsplit("/", 1)[0], recursive=True)
+        if self.is_local:  # object stores have no directories; create_dir can create buckets
+            self._fs.create_dir(path.rsplit("/", 1)[0], recursive=True)
         return path
+
+    def uri_of(self, rel: str) -> str:
+        """Address of `rel` for other systems (e.g. BigQuery load jobs)."""
+        return self._path(rel) if self.is_local else f"gs://{self._path(rel)}"
 
     def write_table(self, rel: str, table: pa.Table) -> None:
         pq.write_table(table, self._prepare(rel), filesystem=self._fs)
@@ -84,3 +90,13 @@ class Lake:
             for info in self._fs.get_file_info(selector)
             if info.type == fs.FileType.File and info.base_name.endswith(".json")
         }
+
+    def manifests(self) -> list[dict[str, Any]]:
+        """Contents of every success marker: the meetings downstream steps may read."""
+        selector = fs.FileSelector(self._path(MARKERS_DIR), recursive=True, allow_not_found=True)
+        root = f"{self._root}/"
+        return [
+            self.read_json(info.path.removeprefix(root))
+            for info in self._fs.get_file_info(selector)
+            if info.type == fs.FileType.File and info.base_name.endswith(".json")
+        ]
