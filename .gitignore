@@ -33,8 +33,9 @@ htmlcov/
 *.tfstate
 *.tfstate.*
 
-# Local data
-data/
+# Local data (anchored: nested src/<pkg>/data or tests/data stay tracked)
+/data/
+projects/*/data/
 *.duckdb
 *.duckdb.wal
 

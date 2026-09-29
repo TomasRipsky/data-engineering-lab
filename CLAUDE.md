@@ -40,6 +40,7 @@ Chat in Spanish. Code, commits, READMEs, ADRs and the second brain in English.
 
 ## Security & cost (this repo is public)
 - Secrets never enter the repo. gitleaks runs on every commit; only `.env.example` is committed.
+- On any fresh clone or new machine, run `pre-commit install` before the first commit — without it no hook runs.
 - Never read or print `.env` files or credentials.
 - Cloud labs: free tier first, budget alert set before first deploy, `make destroy` implemented and tested before anything is left running. Tell Tomas the expected cost before creating billable resources.
 
