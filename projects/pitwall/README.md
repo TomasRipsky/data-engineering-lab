@@ -6,15 +6,16 @@
 
 ```mermaid
 flowchart LR
-  source[Source] --> ingest[Ingest] --> storage[(Storage)] --> transform[Transform] --> serve[Serve]
+  api[OpenF1 API] --> ingest[pitwall ingest] --> lake[(Raw lake: Parquet + markers)]
+  lake -. Plan 2 .-> bq[(BigQuery)] -. Plan 3 .-> dbt[dbt] -. Plan 4 .-> site[Evidence on GitHub Pages]
 ```
 
 ## Tech stack
 
 | Layer | Choice | Why |
 |---|---|---|
-| Ingestion | | |
-| Storage | | |
+| Ingestion | Python (httpx, pyarrow) | Small, testable, teaches rate limiting and idempotency — [ADR 0002](docs/decisions/0002-lake-first-custom-extractor.md) |
+| Storage | Parquet lake (local now, GCS in Plan 2) | Replayable source of truth |
 | Transformation | | |
 | Orchestration | | |
 
@@ -23,6 +24,8 @@ flowchart LR
 ```bash
 make setup
 make test
+make ingest ARGS="--meeting 1255"   # 2025 Chinese GP into .lake/
+make ingest ARGS="--season 2024"    # backfill (~15 min: the API allows 30 requests/min)
 ```
 
 ## Cost & teardown
