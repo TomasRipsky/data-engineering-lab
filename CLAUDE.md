@@ -37,6 +37,7 @@ Chat in Spanish. Code, commits, READMEs, ADRs and the second brain in English.
 - SQL: lowercase keywords, CTEs over nested subqueries, one model = one grain (state it).
 - Terraform: one root module per cloud per project; remote state only when shared.
 - Config via environment variables; `.env.example` documents them.
+- Library/cloud APIs change fast: check current docs via the Context7 MCP (`.mcp.json`) before relying on memory.
 
 ## Security & cost (this repo is public)
 - Secrets never enter the repo. gitleaks runs on every commit; only `.env.example` is committed.
