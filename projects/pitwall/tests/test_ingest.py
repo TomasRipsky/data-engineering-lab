@@ -99,3 +99,22 @@ def test_missing_required_data_skips_the_meeting_without_writing(
 def test_unknown_meeting_is_an_error(fixture_client, lake):
     with pytest.raises(ValueError, match="99999"):
         ingest_one(fixture_client, lake, 99999, NOW)
+
+
+def test_latest_still_covers_the_previous_season_in_january(fixture_client, lake):
+    # A late-season GP not yet ingested must not be forgotten when the year changes.
+    january = datetime(2026, 1, 10, tzinfo=UTC)
+    assert ingest_latest(fixture_client, lake, january) == [1255]
+
+
+def test_latest_fails_loudly_when_a_meeting_stays_without_data(make_client, openf1_fixtures, lake):
+    def no_laps(request):
+        if request.url.path.endswith("/laps"):
+            return httpx.Response(404, json=NO_RESULTS)
+        return openf1_fixtures(request)
+
+    client = make_client(no_laps)
+    two_days_after = datetime(2025, 3, 25, 12, 0, tzinfo=UTC)
+    assert ingest_latest(client, lake, two_days_after) == []  # may still arrive: just wait
+    with pytest.raises(RuntimeError, match="1255"):
+        ingest_latest(client, lake, NOW)  # 9 days after the race: someone must look

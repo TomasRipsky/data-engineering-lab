@@ -19,6 +19,8 @@ from pitwall.lake import Lake, marker_file, meeting_file, season_file
 log = logging.getLogger(__name__)
 
 SETTLE_TIME = timedelta(hours=6)  # OpenF1 needs some time after a race to publish all data
+STALE_AFTER = timedelta(days=3)  # still no data after this: fail the run so a human looks
+LOOKBACK = timedelta(days=45)  # --latest keeps scanning the previous season this long
 Row = dict[str, Any]
 
 
@@ -38,17 +40,21 @@ class Season:
             and not s.get("is_cancelled")
         ]
 
+    def race_end(self, meeting_key: int) -> datetime | None:
+        """End of the meeting's last race session; None if it has none or an end is unknown."""
+        ends = [s.get("date_end") for s in self.race_sessions(meeting_key)]
+        if not ends or not all(ends):
+            return None
+        return max(map(datetime.fromisoformat, ends))
+
     def finished_meetings(self, now: datetime) -> list[int]:
         """Meetings whose last race session ended at least SETTLE_TIME before `now`."""
-        finished = []
-        for key in sorted({s["meeting_key"] for s in self.sessions}):
-            ends = [s.get("date_end") for s in self.race_sessions(key)]
-            settled = (
-                ends and all(ends) and max(map(datetime.fromisoformat, ends)) + SETTLE_TIME <= now
-            )
-            if settled:
-                finished.append(key)
-        return finished
+        keys = sorted({s["meeting_key"] for s in self.sessions})
+        return [
+            key
+            for key in keys
+            if (end := self.race_end(key)) is not None and end + SETTLE_TIME <= now
+        ]
 
 
 def refresh_season(client: OpenF1Client, lake: Lake, year: int, now: datetime) -> Season:
@@ -111,11 +117,29 @@ def ingest_meeting(
 
 
 def ingest_latest(client: OpenF1Client, lake: Lake, now: datetime) -> list[int]:
-    """Scheduled mode: finished meetings of the current season not yet in the lake."""
-    season = refresh_season(client, lake, now.year, now)
+    """Scheduled mode: finished meetings not yet in the lake.
+
+    Also scans the previous season for LOOKBACK days, so a late-December race is not lost at
+    New Year. A meeting still without data STALE_AFTER its race fails the run (after the
+    others are ingested) instead of being skipped silently forever.
+    """
     done = lake.markers()
-    pending = [key for key in season.finished_meetings(now) if key not in done]
-    return [key for key in pending if ingest_meeting(client, lake, season, key, now)]
+    ingested, stale = [], []
+    for year in sorted({(now - LOOKBACK).year, now.year}):
+        season = refresh_season(client, lake, year, now)
+        for key in season.finished_meetings(now):
+            if key in done:
+                continue
+            if ingest_meeting(client, lake, season, key, now):
+                ingested.append(key)
+            elif season.race_end(key) + STALE_AFTER <= now:
+                stale.append(key)
+    if stale:
+        raise RuntimeError(
+            f"meetings {stale} still have no laps/stints {STALE_AFTER} after the race "
+            f"(ingested this run: {ingested}); check OpenF1"
+        )
+    return ingested
 
 
 def ingest_season(client: OpenF1Client, lake: Lake, year: int, now: datetime) -> list[int]:
