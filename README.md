@@ -9,6 +9,14 @@ Each project is self-contained under [`projects/`](projects/) with its own READM
 | Project | What it does | Stack | Status |
 |---|---|---|---|
 
+## Getting started
+
+```bash
+git clone https://github.com/TomasRipsky/data-engineering-lab.git
+cd data-engineering-lab
+pre-commit install   # enables gitleaks, ruff and branch guards on every commit
+```
+
 ## How this repo works
 
 - **Branches:** `main` (releases) ← `dev` (integration) ← `<type>/<issue#>-<slug>` (work). Every change starts as an issue and lands through a pull request.

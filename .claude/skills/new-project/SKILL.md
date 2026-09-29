@@ -14,9 +14,11 @@ Derive `PKG="${NAME//-/_}"`. Stop if `projects/$NAME` already exists.
 ```bash
 git switch dev && git pull --ff-only
 gh label create "project:$NAME" --color 0E8A16 --description "Project $NAME" 2>/dev/null || true
-ISSUE=$(gh issue create --title "feat($NAME): bootstrap project" \
+URL=$(gh issue create --title "feat($NAME): bootstrap project" \
   --label "type:feat,project:$NAME" \
-  --body "Bootstrap \`projects/$NAME\` from the template. Pitch: $PITCH" | grep -oE '[0-9]+$')
+  --body "Bootstrap \`projects/$NAME\` from the template. Pitch: $PITCH") || { echo "issue creation failed"; exit 1; }
+ISSUE=${URL##*/}
+[[ "$ISSUE" =~ ^[0-9]+$ ]] || { echo "unexpected gh output: $URL"; exit 1; }
 git switch -c "feat/$ISSUE-$NAME-bootstrap"
 ```
 
