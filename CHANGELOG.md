@@ -5,6 +5,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+### Added
+- `pr-reviewer` agent: read-only, data-engineering-focused PR review before merges.
+
 ## [0.2.0] - 2026-09-29
 
 ### Added

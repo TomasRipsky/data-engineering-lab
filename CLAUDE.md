@@ -31,6 +31,7 @@ Chat in Spanish. Code, commits, READMEs, ADRs and the second brain in English.
 - Commits: Conventional Commits with project scope — `feat(marineflow): ...`; lab-level scope is `lab`.
 - Release: (1) branch `chore/<issue#>-release-vX.Y.Z` from `dev` moves CHANGELOG `[Unreleased]` → `[X.Y.Z]`, PR into `dev`; (2) PR `dev → main` titled `release: vX.Y.Z`, **merge commit**; (3) `gh release create vX.Y.Z --target main`.
 - I never merge a PR or cut a release without Tomas's OK.
+- Before merging a non-trivial PR, run the `pr-reviewer` agent (`.claude/agents/`) and fix its Critical/Important findings.
 
 ## Conventions
 - Python: `uv` for envs/deps, `ruff` for lint+format, `pytest` for tests. Python ≥ 3.12.
@@ -52,7 +53,7 @@ Chat in Spanish. Code, commits, READMEs, ADRs and the second brain in English.
 - **graphify** is a derived index over repo and vault, never the source of truth. Use it (`--update`, incremental) when it saves tokens without losing context — e.g. relational questions over real code or a large vault.
 
 ## Efficiency
-Tokens are scarce. Targeted reads over broad sweeps; no custom agents until a task repeats or needs isolation; no speculative scaffolding.
+Tokens are scarce. Targeted reads over broad sweeps; no speculative scaffolding. Agents live in `.claude/agents/` (today: `pr-reviewer`); add one only when a task repeats or needs an independent/isolated context, and tune them at retros.
 
 ## Evolving
 - Store Tomas's preferences and corrections in memory as they happen — also what worked.
