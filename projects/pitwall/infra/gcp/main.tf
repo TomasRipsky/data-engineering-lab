@@ -17,6 +17,11 @@ resource "google_storage_bucket" "raw" {
   public_access_prevention    = "enforced"
   force_destroy               = true
 
+  # Soft delete would keep (and bill) every overwritten or destroyed object for 7 days.
+  soft_delete_policy {
+    retention_duration_seconds = 0
+  }
+
   depends_on = [google_project_service.apis]
 }
 

@@ -71,10 +71,16 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     var.env == "prod" ? { "attribute.environment" = "assertion.environment" } : {},
   )
 
-  # Without a condition any GitHub repository could exchange tokens here.
+  # Without a condition any GitHub repository could exchange tokens here. Only this repo's
+  # pitwall-* workflows qualify, never pull_request_target (it runs with base-repo claims).
+  # Prod also needs the `prod` environment and a protected branch: the scheduled run starts on
+  # the default branch (dev) and checks out main, so both are allowed; neither takes pushes.
   attribute_condition = join(" && ", compact([
     "assertion.repository_id == '${var.github_repository_id}'",
+    "assertion.workflow_ref.startsWith('${var.github_repository}/.github/workflows/pitwall-')",
+    "assertion.event_name != 'pull_request_target'",
     var.env == "prod" ? "assertion.environment == 'prod'" : "",
+    var.env == "prod" ? "assertion.ref in ['refs/heads/dev', 'refs/heads/main']" : "",
   ]))
 
   oidc {
