@@ -6,6 +6,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 ## [Unreleased]
 
 ### Added
+- `pitwall`: OpenF1 extractor (`pitwall ingest`) writing contract-checked Parquet to a raw lake, idempotent per Grand Prix.
 - `pr-reviewer` agent: data-engineering-focused PR review before merges; read-only enforced by a tested Bash allowlist hook.
 
 ## [0.2.0] - 2026-09-29

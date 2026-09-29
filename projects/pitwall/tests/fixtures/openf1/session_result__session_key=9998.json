@@ -1,0 +1,28 @@
+[
+ {
+  "position": 1,
+  "driver_number": 81,
+  "number_of_laps": 56,
+  "points": 25.0,
+  "dnf": false,
+  "dns": false,
+  "dsq": false,
+  "duration": 5455.026,
+  "gap_to_leader": 0,
+  "meeting_key": 1255,
+  "session_key": 9998
+ },
+ {
+  "position": 2,
+  "driver_number": 4,
+  "number_of_laps": 56,
+  "points": 18.0,
+  "dnf": false,
+  "dns": false,
+  "dsq": false,
+  "gap_to_leader": 9.748,
+  "duration": 5464.774,
+  "meeting_key": 1255,
+  "session_key": 9998
+ }
+]
