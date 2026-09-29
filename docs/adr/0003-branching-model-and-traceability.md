@@ -10,6 +10,9 @@ Tomas wants professional branch management: protected `main`, a stable `dev`, na
 - `main`: released history. `dev`: stable integration. Both protected by GitHub rulesets: PR required, no force-push, no deletion, no bypass (admins included). `dev` allows squash merges only; `main` allows merge commits only.
 - Work branches from `dev`: `<type>/<issue#>-<slug>`.
 - Chain: issue → branch → Conventional Commits (project scope) → PR with `Closes #n` → squash into `dev` → release PR `dev → main` (merge commit) → tag `vX.Y.Z` + CHANGELOG.
+- `dev` is the **default branch**, so PRs target it by default and `Closes #n` auto-closes issues on merge (GitHub only auto-closes on the default branch).
+- Rulesets cannot restrict which branch a PR into `main` comes from; "`main` only receives PRs from `dev`" is a convention Claude follows.
+- Release steps: CHANGELOG bump through a `chore/<issue#>-release-vX.Y.Z` PR into `dev` → release PR `dev → main` → `gh release create vX.Y.Z --target main`.
 - Required approvals: 0 (GitHub forbids self-approval); required status checks are added when CI exists.
 - Repo is public — branch protection on private repos requires a paid plan, and the repo is a portfolio anyway.
 
