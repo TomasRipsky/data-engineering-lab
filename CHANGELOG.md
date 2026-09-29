@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-29
+
 ### Added
 - Project-scoped Context7 MCP (`.mcp.json`) for up-to-date library and cloud docs.
 
