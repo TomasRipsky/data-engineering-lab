@@ -74,7 +74,10 @@ Workflows live in the repo root `.github/workflows/` (`pitwall-ci.yml`, `pitwall
 | Level | Endpoints |
 |---|---|
 | Per season | `meetings`, `sessions` |
-| Per session | `drivers`, `laps`, `stints`, `pit`, `position`, `weather`, `race_control`, `session_result`, `starting_grid`, `overtakes` |
+| Per meeting | `starting_grid` (attached to the *qualifying* sessions, so fetched by `meeting_key`) |
+| Per session | `drivers`, `laps`, `stints`, `pit`, `position`, `weather`, `race_control`, `session_result`, `overtakes` |
+
+Race and Sprint sessions are `session_type == "Race"` (verified: `session_name` is `Race` or `Sprint`); sessions with `is_cancelled == true` are ignored. Meetings without such sessions (e.g. pre-season testing) are never ingested.
 
 Out of v1: `car_data`, `location`, `intervals` (phase 2), `team_radio`, `championship_drivers`, `championship_teams`.
 
@@ -85,7 +88,7 @@ Out of v1: `car_data`, `location`, `intervals` (phase 2), `team_radio`, `champio
 
 Every run first refreshes the season-level files (`meetings`, `sessions`) for the seasons it touches.
 
-**Request budget.** ~12 requests per session, ~1.25 Race/Sprint sessions per meeting, ~24 meetings per season → ~400 requests per season ≈ 15 min at 30 req/min. Full backfill 2023 → 2026 ≈ 1 h, run once.
+**Request budget.** ~9 requests per session plus 1 per meeting, ~1.25 Race/Sprint sessions per meeting, ~24 meetings per season → ~400 requests per season ≈ 15 min at 30 req/min. Full backfill 2023 → 2026 ≈ 1 h, run once.
 
 **Lake layout** (root from env var `PITWALL_LAKE_URI`, e.g. `gs://pitwall-dev-raw`):
 
@@ -190,8 +193,9 @@ Evidence project in `dashboard/`, reading `pitwall-prod` marts at build time wit
 **Errors**
 - **Client-side rate limiter** keeps requests under 30/min (prevent, don't react).
 - **Retries:** exponential backoff with jitter on 429, 5xx and network errors, max 5 attempts, honouring `Retry-After`. Other 4xx fail fast. Every request has a timeout.
+- **"No data" is HTTP 404** with body `{"detail": "No results found."}` (verified). The client maps exactly that response to an empty list; any other 404 fails.
 - **Data not yet available:** if `laps` or `stints` return empty for a session considered finished, the meeting is skipped with a warning (no marker written) and retried on the next run; the run does not fail.
-- **Empty optional endpoints** (e.g. `overtakes`, `starting_grid` for some sessions) are valid and written as empty files with the contract schema.
+- **Empty optional endpoints** are valid and written as empty files with the contract schema. Real example: `pit` has no data for some 2023 races (e.g. Bahrain 2023, session 7953); dbt must tolerate it (pit stops can be derived from stint changes — decided in the dbt plan).
 
 **Testing**
 - **Extractor (TDD, pytest):** rate limiter, retry policy, path building, schema contract, marker logic — using `httpx.MockTransport` (no extra mocking library). An integration test runs `ingest --meeting` end to end against a temporary `file://` lake with small recorded JSON fixtures from one real GP.
@@ -219,7 +223,8 @@ Evidence project in `dashboard/`, reading `pitwall-prod` marts at build time wit
 | Item | Check | Fallback |
 |---|---|---|
 | Evidence BigQuery connector with WIF / Application Default Credentials | Context7 / Evidence docs | Export marts to Parquet in the pipeline; Evidence reads the files |
-| OpenF1 session filter for Race + Sprint (`session_type` vs `session_name`) | Query `sessions?year=2025` | Filter on `session_name in ('Race','Sprint')` |
-| Response size of `position` per session within API limits | One real request | Split requests by `driver_number` |
+| ~~OpenF1 session filter for Race + Sprint~~ | Resolved: `session_type == "Race"` covers both | — |
+| ~~Response size per session~~ | Resolved: largest (`laps`) ≈ 500 KB per race | — |
+| Lab `.gitignore` ignores `*.tfvars` | Plan 2 | Commit `*.tfvars.example` or pass `-var` from the Makefile |
 | GitHub Pages is one site per repo (`tomasripsky.github.io/data-engineering-lab/`) | Evidence `basePath` config | A second project needing Pages triggers a lab-level ADR (combined site or separate repo) |
 | BigQuery custom quota settable via Terraform | Provider docs | Set once in `make bootstrap` with `gcloud` |
