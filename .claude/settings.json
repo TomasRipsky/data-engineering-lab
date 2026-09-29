@@ -24,5 +24,8 @@
       "Read(./**/.env.*.local)",
       "Read(./**/.env.prod*)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "context7"
+  ]
 }
