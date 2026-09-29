@@ -12,12 +12,12 @@
 
 ## Global Constraints
 
-- Local repo root: `/Users/tomasripsky/Data Engineering/Claude Code Enviroment` (path has spaces — always quote). Do **not** rename the local folder (Claude's memory path depends on it).
+- Local repo root: `$HOME/Data Engineering/Claude Code Enviroment` (path has spaces — always quote). Do **not** rename the local folder (Claude's memory path depends on it).
 - GitHub repo: `TomasRipsky/data-engineering-lab`, **public**. Vault repo: `TomasRipsky/second-brain`, **private**.
 - Code, commits, docs, vault: English. Chat: Spanish.
 - Commits: Conventional Commits; environment scope is `lab`. Every commit message ends with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - Bootstrap commits (Tasks 1–6) go directly to local `main` using `SKIP=no-commit-to-branch`; after Task 7 nobody commits to `main`/`dev` directly.
-- Vault destination: `/Users/tomasripsky/Data Engineering/Second Brain`.
+- Vault destination: `$HOME/Data Engineering/Second Brain`.
 - Python floor `>=3.12`; ruff line length 100.
 
 ## Review Focus
@@ -113,7 +113,7 @@ indent_style = tab
 
 Run:
 ```bash
-cd "/Users/tomasripsky/Data Engineering/Claude Code Enviroment"
+cd "$HOME/Data Engineering/Claude Code Enviroment"
 git check-ignore -v .env .env.local sa-credentials.json prod.tfvars key.pem projects/x/.env .DS_Store
 git check-ignore .env.example || echo "OK: .env.example is tracked"
 ```
@@ -228,7 +228,7 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `cd "/Users/tomasripsky/Data Engineering/Claude Code Enviroment/projects/_template" && uv run pytest`
+Run: `cd "$HOME/Data Engineering/Claude Code Enviroment/projects/_template" && uv run pytest`
 Expected: FAIL — build error because `src/template_project/__init__.py` is missing (uv_build cannot find the module).
 
 - [ ] **Step 4: Minimal implementation** — `projects/_template/src/template_project/__init__.py`
@@ -343,7 +343,7 @@ Architecture Decision Records live in [docs/decisions/](docs/decisions/).
 - [ ] **Step 7: Commit**
 
 ```bash
-cd "/Users/tomasripsky/Data Engineering/Claude Code Enviroment"
+cd "$HOME/Data Engineering/Claude Code Enviroment"
 git add projects/_template
 SKIP=no-commit-to-branch git commit -m "feat(lab): add self-contained uv project template
 
@@ -473,7 +473,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - [ ] **Step 4: Verify and commit**
 
 ```bash
-cd "/Users/tomasripsky/Data Engineering/Claude Code Enviroment"
+cd "$HOME/Data Engineering/Claude Code Enviroment"
 wc -l CLAUDE.md   # expected: < 150
 git add CLAUDE.md README.md CHANGELOG.md
 SKIP=no-commit-to-branch git commit -m "docs(lab): add Claude operating manual, README and changelog
@@ -587,7 +587,7 @@ Cheap sessions, durable knowledge. Requires discipline: consolidate memory at re
 - [ ] **Step 2: Commit**
 
 ```bash
-cd "/Users/tomasripsky/Data Engineering/Claude Code Enviroment"
+cd "$HOME/Data Engineering/Claude Code Enviroment"
 git add docs/adr
 SKIP=no-commit-to-branch git commit -m "docs(lab): add ADRs 0001-0004 for repo, tooling, branching and memory
 
@@ -697,7 +697,7 @@ blank_issues_enabled: false
 - [ ] **Step 2: Validate and commit**
 
 ```bash
-cd "/Users/tomasripsky/Data Engineering/Claude Code Enviroment"
+cd "$HOME/Data Engineering/Claude Code Enviroment"
 git add .github
 SKIP=no-commit-to-branch git commit -m "chore(lab): add issue and pull request templates
 
@@ -804,14 +804,14 @@ Do not merge — show Tomas the PR link and wait for his OK.
 ```json
 {
   "permissions": {
-    "additionalDirectories": ["/Users/tomasripsky/Data Engineering/Second Brain"]
+    "additionalDirectories": ["$HOME/Data Engineering/Second Brain"]
   }
 }
 ```
 
 Run:
 ```bash
-cd "/Users/tomasripsky/Data Engineering/Claude Code Enviroment"
+cd "$HOME/Data Engineering/Claude Code Enviroment"
 git check-ignore .claude/settings.local.json
 for n in ais-stream 2025-lab Bad_Name ok; do [[ "$n" =~ ^[a-z][a-z0-9-]*$ ]] && echo "valid $n -> ${n//-/_}" || echo "reject $n"; done
 ```
@@ -837,7 +837,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: Create the public repo and push `main`**
 
 ```bash
-cd "/Users/tomasripsky/Data Engineering/Claude Code Enviroment"
+cd "$HOME/Data Engineering/Claude Code Enviroment"
 gh repo create TomasRipsky/data-engineering-lab --public --source . --remote origin \
   --description "Hands-on, multi-cloud data engineering projects — built to learn deeply and show the work." --push
 ```
@@ -932,27 +932,27 @@ Expected: release URL printed.
 ### Task 8: Move and version the second brain
 
 **Interfaces:**
-- Produces: vault at `/Users/tomasripsky/Data Engineering/Second Brain`, private repo `TomasRipsky/second-brain`, memory entry `second-brain-vault`.
+- Produces: vault at `$HOME/Data Engineering/Second Brain`, private repo `TomasRipsky/second-brain`, memory entry `second-brain-vault`.
 
 - [ ] **Step 1: Safety check (Review Focus #4)**
 
 ```bash
 pgrep -x Obsidian && echo "STOP: ask Tomas to quit Obsidian" || echo "ok"
-test -e "/Users/tomasripsky/Data Engineering/Second Brain" && echo "STOP: destination exists" || echo "ok"
+test -e "$HOME/Data Engineering/Second Brain" && echo "STOP: destination exists" || echo "ok"
 ```
 Expected: `ok` twice. Otherwise stop and ask.
 
 - [ ] **Step 2: Move**
 
 ```bash
-mv ~/Downloads/Obsidian_Data_Engineering_Second_Brain "/Users/tomasripsky/Data Engineering/Second Brain"
-find "/Users/tomasripsky/Data Engineering/Second Brain" -name '*.md' -not -path '*/.obsidian/*' | wc -l
+mv ~/Downloads/Obsidian_Data_Engineering_Second_Brain "$HOME/Data Engineering/Second Brain"
+find "$HOME/Data Engineering/Second Brain" -name '*.md' -not -path '*/.obsidian/*' | wc -l
 ```
 Expected: `30`.
 
 - [ ] **Step 3: Git + private repo**
 
-`/Users/tomasripsky/Data Engineering/Second Brain/.gitignore`:
+`$HOME/Data Engineering/Second Brain/.gitignore`:
 ```gitignore
 .DS_Store
 .trash/
@@ -961,7 +961,7 @@ Expected: `30`.
 ```
 
 ```bash
-cd "/Users/tomasripsky/Data Engineering/Second Brain"
+cd "$HOME/Data Engineering/Second Brain"
 git init -b main && git add . && git commit -q -m "chore: initial import of data engineering second brain
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
@@ -986,7 +986,7 @@ Ask Tomas to open Obsidian → "Open folder as vault" → `~/Data Engineering/Se
 - [ ] **Step 1: Run all checks**
 
 ```bash
-cd "/Users/tomasripsky/Data Engineering/Claude Code Enviroment"
+cd "$HOME/Data Engineering/Claude Code Enviroment"
 git switch dev && git pull --ff-only
 pre-commit run --all-files
 (cd projects/_template && uv run pytest -q && uv run ruff check .)
