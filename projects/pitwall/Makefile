@@ -2,6 +2,8 @@
 
 ENV ?= dev
 PROJECT_PREFIX ?= pitwall-tr
+# Budget alert amount, in the billing account currency (EUR for this account)
+BUDGET_AMOUNT ?= 5
 PROJECT_ID := $(PROJECT_PREFIX)-$(ENV)
 TF := terraform -chdir=infra/gcp
 TF_VARS := -var env=$(ENV) -var project_id=$(PROJECT_ID)
@@ -40,7 +42,7 @@ bootstrap: ## One-off per env: create project, link billing, budget alert. BILLI
 	gcloud billing projects link $(PROJECT_ID) --billing-account=$(BILLING_ACCOUNT)
 	gcloud services enable serviceusage.googleapis.com cloudresourcemanager.googleapis.com billingbudgets.googleapis.com --project=$(PROJECT_ID)
 	gcloud billing budgets create --billing-account=$(BILLING_ACCOUNT) --billing-project=$(PROJECT_ID) \
-	  --display-name="pitwall-$(ENV)" --budget-amount=5USD --filter-projects=projects/$(PROJECT_ID) \
+	  --display-name="pitwall-$(ENV)" --budget-amount=$(BUDGET_AMOUNT) --filter-projects=projects/$(PROJECT_ID) \
 	  --threshold-rule=percent=0.5 --threshold-rule=percent=0.9 --threshold-rule=percent=1.0
 
 init:

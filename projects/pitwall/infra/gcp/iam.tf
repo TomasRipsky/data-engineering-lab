@@ -1,6 +1,8 @@
 resource "google_service_account" "pipeline" {
   account_id   = "pitwall-pipeline"
   display_name = "pitwall pipeline (${var.env})"
+
+  depends_on = [google_project_service.apis]
 }
 
 resource "google_storage_bucket_iam_member" "pipeline_lake" {
@@ -26,6 +28,8 @@ resource "google_service_account" "dashboard" {
   count        = var.env == "prod" ? 1 : 0
   account_id   = "pitwall-dashboard"
   display_name = "pitwall dashboard reader"
+
+  depends_on = [google_project_service.apis]
 }
 
 resource "google_bigquery_dataset_iam_member" "dashboard_marts" {
