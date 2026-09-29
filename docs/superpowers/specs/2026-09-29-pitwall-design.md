@@ -99,7 +99,7 @@ raw/<endpoint>/season=2025/meeting_key=1254/part.parquet      # all sessions of 
 raw/_success/season=2025/meeting_key=1254.json                # written last; manifest
 ```
 
-- Each record gains `_ingested_at` (UTC timestamp). The manifest lists endpoints, row counts, request URLs and `_ingested_at`.
+- Each record gains `_ingested_at` (UTC timestamp). The manifest lists row counts per endpoint (its keys are the endpoints the loader may read), the request count and `_ingested_at`; request URLs are reproducible from the path and were dropped.
 - **Atomicity:** GCS has no atomic rename, so a meeting is visible only once its `_success` marker exists. A crashed run leaves files without a marker; they are ignored by the loader and overwritten by the next run. A single object write is atomic, so season-level files need no marker.
 - **Idempotency:** re-ingesting a meeting rewrites the same object paths and the same marker.
 - **State:** the lake is the state (which markers exist). No separate state store.
@@ -173,14 +173,14 @@ Evidence project in `dashboard/`, reading `pitwall-prod` marts at build time wit
 
 ## 9. Infrastructure, security, cost, teardown
 
-**Bootstrap (manual, once, scripted as `make bootstrap`):** create projects `pitwall-dev` and `pitwall-prod`, link billing, enable APIs, and create the **billing budget alert (US$5; 50/90/100%) before any resource**. Project creation stays out of Terraform (needs org/billing-level permissions not worth managing here).
+**Bootstrap (manual, once, scripted as `make bootstrap`):** create projects `pitwall-tr-dev` and `pitwall-tr-prod` (project IDs are global; only dev exists before Plan 4), link billing, enable APIs, and create the **billing budget alert (5 in the billing account's currency — EUR here; 50/90/100%) before any Terraform resource**. Project creation stays out of Terraform (needs org/billing-level permissions not worth managing here).
 
 **Terraform** — one root in `infra/gcp/`, variable `env`, `dev.tfvars` / `prod.tfvars`, **local state with one workspace per env** (only Tomas applies; migrate to remote state via ADR if CI ever applies). Per environment:
 - Bucket `pitwall-<env>-raw`, uniform bucket-level access, `force_destroy = true`.
-- BigQuery datasets `raw`, `staging`, `intermediate`, `marts` (`us-central1`).
+- BigQuery datasets `raw`, `staging`, `intermediate`, `marts` (`us-central1`), with `delete_contents_on_destroy`.
 - Service accounts: `pipeline` (write bucket, BigQuery data editor + job user) and, in prod only, `dashboard` (data viewer on `marts` + job user).
-- Workload Identity Pool + GitHub OIDC provider with `attribute_condition` restricted to `TomasRipsky/data-engineering-lab` (prod: additionally `environment == "prod"`).
-- **BigQuery custom quota** on query bytes per day (50 GB) — a budget alert only warns; a quota stops spending.
+- Workload Identity Pool (ID with a random suffix: deleted pools stay reserved 30 days) + GitHub OIDC provider whose `attribute_condition` pins the immutable repository ID of `TomasRipsky/data-engineering-lab` (prod: additionally `environment == "prod"`).
+- **BigQuery custom quota** on query bytes per day (50 GiB, via the `google-beta` provider; default is 200 TiB) — a budget alert only warns; a quota stops spending.
 
 **Secrets:** none. Project IDs and WIF provider names are GitHub *variables*. gitleaks keeps running on every commit.
 
@@ -227,4 +227,5 @@ Evidence project in `dashboard/`, reading `pitwall-prod` marts at build time wit
 | ~~Response size per session~~ | Resolved: largest (`laps`) ≈ 500 KB per race | — |
 | Lab `.gitignore` ignores `*.tfvars` | Plan 2 | Commit `*.tfvars.example` or pass `-var` from the Makefile |
 | GitHub Pages is one site per repo (`tomasripsky.github.io/data-engineering-lab/`) | Evidence `basePath` config | A second project needing Pages triggers a lab-level ADR (combined site or separate repo) |
-| BigQuery custom quota settable via Terraform | Provider docs | Set once in `make bootstrap` with `gcloud` |
+| ~~BigQuery custom quota settable via Terraform~~ | Resolved: `google_service_usage_consumer_quota_override` (google-beta), metric `bigquery.googleapis.com/quota/query/usage`, limit `/d/project`, MiB | — |
+| ~~pyarrow `create_dir` on GCS~~ | Resolved: it can create buckets, so the lake only calls it on local filesystems | — |
