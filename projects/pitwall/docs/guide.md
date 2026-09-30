@@ -225,12 +225,122 @@ The pipeline service account has three grants ([`infra/gcp/iam.tf`](../infra/gcp
 
 > **In short.** Every run, BigQuery throws the raw tables away and rebuilds them from the lake — it's small, free and can't create duplicates. Each table is swapped in one go, so nobody ever sees a half-loaded table. The loader only takes the files listed in the "ready" markers, never "everything in the folder", so a half-written Grand Prix can't sneak in. The column types come straight from the Parquet files, which come from the contract: one definition, used end to end.
 
+### Infrastructure (`infra/gcp/`, `Makefile`)
+
+Everything pitwall runs on in GCP exists because of two commands per environment: `make bootstrap` (a GCP project with billing and a budget alert, via `gcloud`, once) and `make apply` (everything *inside* the project, via Terraform). Two identical projects, `pitwall-tr-dev` and `pitwall-tr-prod`. GitHub Actions reaches them **without a single key**, and two guardrails keep the bill at zero.
+
+```
+make bootstrap ENV=dev    gcloud: create project in the org → link billing → budget alert (5 EUR)
+        │                  (once; needs billing-level permissions, so it lives outside Terraform)
+make apply ENV=dev        terraform workspace "dev" → APIs, bucket, 5 datasets, service accounts,
+        │                  IAM grants, Workload Identity pool + GitHub provider, query quota
+make gh-vars ENV=dev      terraform outputs → GitHub Environment "dev" variables
+        │                  (PITWALL_PROJECT, PITWALL_WIF_PROVIDER, PITWALL_SERVICE_ACCOUNT)
+workflows                 read those variables and log in through WIF
+```
+
+#### 1. Two layers: bootstrap outside Terraform, everything else inside
+
+Creating a project, linking it to a billing account and creating a budget need permissions at **organization and billing-account level**. Giving Terraform those powers would mean its credentials could create projects and spend money anywhere in the org. So that one-off part is a scripted `gcloud` sequence (`make bootstrap`), and Terraform only manages what lives *inside* the project, where a mistake stays contained. The budget is created **before** any resource exists: the alarm is in place before the first thing that could cost money.
+
+#### 2. How Terraform works inside
+
+- **Declarative.** The `.tf` files describe the *desired* end state ("a bucket named X with these settings"), not steps. Terraform works out the steps.
+- **State** is Terraform's memory: a JSON file mapping each resource in the code (`google_storage_bucket.raw`) to the real object's ID in GCP. Without it, Terraform can't tell "create" from "already exists".
+- **`plan`** = *refresh* (ask the GCP APIs how every resource in state looks today) → *diff* against the code → a list of creates, updates, replacements and deletes. **`apply`** executes that list.
+- **Dependency graph.** References between resources (`google_storage_bucket.raw.name` inside the IAM grant) give an order; Terraform walks the graph and runs independent branches in parallel. Where there's no reference but there is a real dependency, we state it: every resource `depends_on` the enabled APIs, because enabling an API isn't instant and the first `apply` would otherwise race and get a 403.
+- **Providers** are plugins that translate resources into API calls (`hashicorp/google`, `google-beta` for the quota override, which only exists in beta, and `random`). `~> 7.0` allows any 7.x; the committed [`.terraform.lock.hcl`](../infra/gcp/.terraform.lock.hcl) pins the exact version and its checksums, so everyone gets the same binary.
+- **One root, two environments: workspaces.** `make apply ENV=prod` runs `terraform workspace select -or-create prod`: same code, **separate state file** (`terraform.tfstate.d/<env>/`), different variables (`-var env=prod -var project_id=pitwall-tr-prod`). What differs between environments is expressed in code: `count = var.env == "prod" ? 1 : 0` creates the dashboard account only in prod, and the CI dataset permission only in dev.
+- **`for_each`** over a list creates one resource per item with a readable address: `google_bigquery_dataset.layers["marts"]`. Adding a sixth dataset is one word in `local.datasets`.
+- **`billing_project` + `user_project_override`** make API calls bill and count quota against the project itself, not whatever default project your laptop's `gcloud` has configured.
+- **State is local** (git-ignored, on Tomas's laptop). Fine while only one person applies; the day CI applies Terraform, it moves to a remote backend (a GCS bucket with locking), recorded in an ADR.
+
+#### 3. Identity without keys: Workload Identity Federation
+
+The classic way for CI to reach GCP is a service-account JSON key stored as a GitHub secret: a password that never expires, can leak through logs or forks, and must be rotated by hand. pitwall has **no keys anywhere**. Instead, GitHub proves who the job is and GCP trades that proof for a credential that expires in an hour:
+
+```
+GitHub Actions job (permissions: id-token: write)
+  1. asks GitHub for an OIDC token: a JWT signed by GitHub with claims —
+     repository_id, workflow_ref, ref, event_name, environment…
+  2. google-github-actions/auth sends it to Google STS (sts.googleapis.com)
+        └─ the pool's provider verifies GitHub's signature (issuer
+           token.actions.githubusercontent.com), maps claims to attributes and
+           evaluates the attribute_condition → false = rejected
+  3. STS returns a short-lived federated token
+  4. IAM Credentials (iamcredentials.googleapis.com) exchanges it for an access token
+     of pitwall-pipeline@…, allowed because the repo principal holds
+     roles/iam.workloadIdentityUser on that service account
+  5. gcloud, bq, dbt and pyarrow find it through ADC; it expires in ~1 h
+```
+
+The `attribute_condition` ([`iam.tf`](../infra/gcp/iam.tf)) is the guest list, clause by clause:
+
+| Clause | Blocks |
+|---|---|
+| `repository_id == '1396373223'` | every other GitHub repository in the world. Without a condition, *any* repo could exchange tokens here. The numeric ID, not the name: a deleted repo's name can be re-registered by someone else, its ID can't |
+| `workflow_ref.startsWith('…/.github/workflows/pitwall-')` | other workflows in the same repo (a future project's CI can't act as pitwall) |
+| `event_name != 'pull_request_target'` | a trigger that runs with the base repo's privileges on a PR's context — the classic way forks steal CI secrets |
+| prod: `environment == 'prod'` | any job not running in the GitHub Environment `prod` |
+| prod: `ref in ['refs/heads/dev', 'refs/heads/main']` | runs triggered from any other branch. `dev` is allowed because the Monday cron always starts on the default branch (`dev`) and *then* checks out `main`; the token carries the triggering ref |
+
+**Defense in depth.** The GitHub Environment `prod` has its own rule: only `dev` and `main` may deploy to it. So prod is guarded twice, by GitHub (who may enter the environment) and by GCP (what the token must say). Either one alone would be a single point of failure.
+
+**Least privilege, also inside the workflows:** only jobs that talk to GCP get `id-token: write`. The jobs that run `npm` (the site build) don't: a malicious npm package there can't mint a GCP token. Fork PRs can't mint tokens at all, so their cloud jobs are skipped.
+
+**Accepted trade-off:** in dev, any `pitwall-*` workflow from any branch of this repo can act as the dev pipeline account, so anyone with write access to the repo can reach dev. Prod is the environment that needs the stricter rules.
+
+#### 4. Two projects, and the accounts inside them
+
+| | dev | prod |
+|---|---|---|
+| Used by | the laptop (`gcloud` user), CI on every PR, manual runs | the Monday cron and releases, code from `main` only |
+| `pitwall-pipeline` SA | lake + 5 datasets + jobs, **plus** `bigquery.user` to create/drop per-PR CI datasets | lake + 5 datasets + jobs |
+| `pitwall-dashboard` SA | — | read-only on `marts` + jobs: what `site-export` runs as |
+| WIF condition | repo + pitwall workflows + no `pull_request_target` | the same + environment `prod` + branch `dev`/`main` |
+
+Separate projects, not prefixes in one project, because a project is GCP's isolation boundary: its own IAM, quotas, billing lines and blast radius. A broken dev can't touch prod, and deleting dev is one command.
+
+#### 5. Cost guardrails: one warns, the other stops
+
+- **Budget alert** (bootstrap): emails at 50 / 90 / 100 % of 5 EUR. It must be in the billing account's currency (EUR here). It **only warns**, after the money is spent, and it can lag by hours.
+- **BigQuery query quota** (Terraform, `google-beta`): at most **50 GiB scanned per day** per project, against a default of 200 TiB (about 1,250 USD a day at the on-demand list price of 6.25 USD/TiB). It **stops**: the query that crosses the line fails. Our dbt build scans megabytes, so the quota never bites in normal operation; it exists for the `select *` in a loop.
+- **Region `us-central1`:** inside GCS's free-tier regions, and bucket and datasets in the same region (loads from GCS require compatible locations).
+- **GCS soft delete off** (`retention_duration_seconds = 0`): by default GCS keeps every overwritten or deleted object for 7 days and bills it. Every ingestion overwrites Parquet files, so soft delete would quietly accumulate copies.
+- **Expected bill: 0/month.** Tens of MB of storage, free loads, tiny queries, and GitHub Actions and Pages are free for public repos.
+
+#### 6. Teardown is part of the design
+
+`make destroy ENV=dev` deletes everything Terraform created, data included ([ADR 0005](decisions/0005-regenerable-storage-is-force-destroyed.md)):
+- `force_destroy` on the bucket and `delete_contents_on_destroy` on the datasets: GCS and BigQuery refuse to delete non-empty containers by default. This is **only** acceptable because the data is regenerable from OpenF1 (~1 h backfill); on irreplaceable data it would be a loaded gun.
+- `disable_on_destroy = false` on APIs: turning an API off can break things outside Terraform; leaving it on costs nothing.
+- The WIF pool ID gets a `random_id` suffix: a deleted pool stays reserved for 30 days, so without it `destroy` → `apply` would fail for a month. Consequence: the provider name changes, so `make gh-vars` must be re-run after an apply that recreates it.
+- The destroy → apply cycle was actually run on dev before prod was left running: infrastructure you have never rebuilt is infrastructure you *hope* is reproducible.
+
+#### Alternatives rejected
+
+- **Service-account JSON keys** as GitHub secrets: the default in most tutorials; also blocked in this organization, whose policy forbids creating service-account keys (the same policy that ruled out Evidence's key-only BigQuery connector, ADR 0007). WIF is strictly better whenever the CI provider speaks OIDC.
+- **One project with `dev_`/`prod_` prefixes:** fewer moving parts, but shared IAM, quotas and blast radius ([ADR 0003](decisions/0003-gcp-two-projects-bigquery-only.md)).
+- **Terraform creating the projects:** needs org/billing admin credentials in Terraform; not worth it for two projects.
+- **Remote state from day one:** a bucket, locking and bootstrap-of-the-bootstrap for a single operator. Deferred until CI applies.
+- **Pulumi / OpenTofu:** Pulumi uses real programming languages; OpenTofu is the open-source fork of Terraform. Terraform chosen for market share (lab rule: industry standard over niche).
+
+#### Where else it applies
+
+- OIDC token exchange is how every modern CI reaches every cloud: AWS (`AssumeRoleWithWebIdentity`), Azure (federated credentials), Kubernetes pods (GKE Workload Identity, EKS IRSA), even PyPI's trusted publishing.
+- "Budgets warn, quotas stop" applies to any metered service: API spend limits, Snowflake resource monitors, Databricks cluster policies.
+- "Bootstrap outside, everything else inside IaC" is the standard landing-zone split: a platform team creates accounts/projects; product teams' Terraform lives inside them.
+
+> **In short.** A one-off script creates each GCP project with its budget alarm; Terraform builds everything inside it from code and can tear it all down and rebuild it. GitHub never holds a password for GCP: each run shows a signed ID card from GitHub, GCP checks it against a strict guest list (this repo, these workflows, and for prod only the prod environment on dev/main) and hands out a key that expires in an hour. Two brakes keep it free: a budget that emails when money is spent, and a daily query limit that simply refuses to spend more.
+
 ## Local vs production
 
 | | Laptop | Cloud (dev / prod) |
 |---|---|---|
 | Lake | `PITWALL_LAKE_URI=.lake` (local folder) | `gs://pitwall-tr-<env>-raw` |
-| Identity | your `gcloud` user credentials (ADC) | *(block 3)* |
+| Identity | your `gcloud` user credentials (ADC: `gcloud auth application-default login`) | `pitwall-pipeline` service account through WIF, a token that lasts ~1 h |
+| Environment choice | `ENV=dev` (default) or `ENV=prod` on any `make` target | the workflow's GitHub Environment (`dev` / `prod`) and its variables |
+| Terraform | only from the laptop; local state per workspace | CI runs `terraform fmt` and `validate`, never `apply` |
 | `pitwall load` | refused on a local lake (BigQuery reads only `gs://`) | 12 load jobs into `<project>.raw`, seconds each |
 
 ## Where it breaks
@@ -244,3 +354,8 @@ The pipeline service account has three grants ([`infra/gcp/iam.tf`](../infra/gcp
 | `load` fails with "the lake has no complete meetings to load" | No markers in the lake (wrong `PITWALL_LAKE_URI`/env, or a fresh environment) | Check `gcloud storage ls gs://pitwall-tr-<env>-raw/raw/_success/`; ingest first |
 | `load` fails on one table; some raw tables are new, others old | A load job failed midway through the twelve | Nothing downstream ran (dbt comes after); fix the cause and re-run `load` — it rebuilds everything |
 | A dbt model fails after a load with "Unrecognized name" | A column was removed from the contract; `WRITE_TRUNCATE` replaced the table schema | Intended: restore the column or update the model, in the same PR |
+| First `make apply` in a new project fails with 403 "API has not been used… or it is disabled" | Enabling an API takes a minute to propagate | Re-run `make apply`; `depends_on` covers ordering, not propagation |
+| Workflow fails at `auth` with "rejected by the attribute condition" | The token's claims don't match: workflow not named `pitwall-*`, a prod run from another branch, or not in the `prod` environment | Compare the job's trigger/branch/environment with `attribute_condition` in `iam.tf` |
+| Workflow fails at `auth` after a destroy → apply | The WIF pool got a new random suffix; GitHub still holds the old provider name | `make gh-vars ENV=<env>` |
+| Terraform wants to create resources that already exist | The local state is lost or a different workspace is selected | `terraform workspace show`; if lost, `terraform import` or destroy the project and re-apply (the data is regenerable) |
+| Budget creation fails in bootstrap | The budget currency differs from the billing account's (EUR) | Use the account's currency: `BUDGET_AMOUNT` is in EUR |
