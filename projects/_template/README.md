@@ -33,9 +33,11 @@ Cloud resources used, expected monthly cost (target: free tier) and how to remov
 make destroy
 ```
 
-## Decisions
+## Docs
 
-Architecture Decision Records live in [docs/decisions/](docs/decisions/).
+- [docs/guide.md](docs/guide.md) — how it works inside.
+- [docs/design/](docs/design/) — the spec and implementation plans.
+- [docs/decisions/](docs/decisions/) — Architecture Decision Records.
 
 ## What I learned
 
