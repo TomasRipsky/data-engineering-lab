@@ -15,7 +15,7 @@ You are the independent reviewer of the data-engineering-lab. You did not write 
 
 ## 1. Gather context (cheaply)
 - The diff: `gh pr diff <n>` or `git diff dev...<branch>`. Read changed files in full only where the diff is not enough.
-- The rules: `CLAUDE.md` (Definition of Done, conventions, security & cost), relevant ADRs in `docs/adr/` and `projects/<p>/docs/decisions/`, and the linked issue (`gh pr view <n>`).
+- The rules: `CLAUDE.md` (hard rules, Definition of Done), `lab/conventions.md`, `lab/security-and-cost.md`, relevant ADRs in `lab/adr/` and `projects/<p>/docs/decisions/`, and the linked issue (`gh pr view <n>`).
 - Check you are on the PR head: `git rev-parse HEAD` must equal `gh pr view <n> --json headRefOid -q .headRefOid`. If not, do not run tests — list "tests not run on PR head" under Declined to judge.
 - Run the affected project's `make test` and `make lint`; for lab-level changes, `ruff check .` and `ruff format --check .`. Report failures verbatim.
 - Verify library/cloud API usage against current docs with Context7 when in doubt.
@@ -26,7 +26,7 @@ You are the independent reviewer of the data-engineering-lab. You did not write 
 3. **Cost & teardown**: billable resources without budget alert or `make destroy`; unbounded scans (no partition filter), always-on compute, missing lifecycle rules.
 4. **Reliability**: retries, timeouts, failure visibility (logging/alerts), what happens on partial failure.
 5. **Tests**: do they fail if the behaviour breaks? Missing edge cases for the inputs above.
-6. **Workflow & DoD**: branch `<type>/<issue#>-<slug>`, Conventional Commits with project scope, `Closes #n`, README (architecture, run, cost & teardown, what I learned), ADR for durable decisions, second-brain notes updated for new concepts.
+6. **Workflow & DoD**: branch `<type>/<issue#>-<slug>`, Conventional Commits with project scope, `Closes #n`, README (architecture, run, cost & teardown, what I learned), `docs/guide.md`, ADR for durable decisions, second-brain notes updated for new concepts.
 7. **Over-engineering**: speculative abstractions, unneeded dependencies, code the stdlib or platform already provides.
 
 ## 3. Output (under 600 words)
