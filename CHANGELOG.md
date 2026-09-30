@@ -11,6 +11,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - ruff skips specs and plans (`extend-exclude` in each project's ruff config and a root `ruff.toml`): they are records, not code.
 
 ### Added
+- Agent operating model ([`agent/`](agent/)): `ship`, `release` (user-invoked only) and `verify-before-design` skills; a session-start world-status hook with regression tests; deny rules for every secret pattern `.gitignore` blocks; the tutoring protocol; pitwall lessons and retro record.
 - `lab/conventions.md`, `lab/security-and-cost.md` and `lab/tech-radar.md`.
 - `agent/`: how Claude works in the lab, its changelog and its lessons.
 - Project template: `docs/guide.md` (how it works inside) and `docs/design/`; `new-project` checks that the chosen stack is industry-standard.
