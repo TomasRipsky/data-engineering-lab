@@ -56,3 +56,23 @@ def test_load_requires_a_bigquery_project(monkeypatch, capsys):
         main(["load"])
     assert exit_info.value.code == 2
     assert "PITWALL_BQ_PROJECT" in capsys.readouterr().err
+
+
+def test_site_export_needs_a_bigquery_project_but_no_lake(monkeypatch, capsys):
+    monkeypatch.delenv("PITWALL_LAKE_URI", raising=False)
+    monkeypatch.delenv("PITWALL_BQ_PROJECT", raising=False)
+    with pytest.raises(SystemExit) as exit_info:
+        main(["site-export", "--out", "somewhere"])
+    assert exit_info.value.code == 2
+    assert "PITWALL_BQ_PROJECT" in capsys.readouterr().err
+
+
+def test_site_export_writes_to_the_given_directory(monkeypatch, tmp_path):
+    monkeypatch.delenv("PITWALL_LAKE_URI", raising=False)
+    monkeypatch.setenv("PITWALL_BQ_PROJECT", "pitwall-tr-dev")
+    calls = []
+    monkeypatch.setattr(
+        "pitwall.cli.export", lambda out, project: calls.append((out, project)) or {}
+    )
+    assert main(["site-export", "--out", str(tmp_path / "data")]) == 0
+    assert calls == [(tmp_path / "data", "pitwall-tr-dev")]

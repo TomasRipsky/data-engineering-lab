@@ -6,11 +6,13 @@ import argparse
 import logging
 import os
 from datetime import UTC, datetime
+from pathlib import Path
 
 from pitwall.client import OpenF1Client
 from pitwall.ingest import ingest_latest, ingest_one, ingest_season
 from pitwall.lake import Lake
 from pitwall.load import bigquery_loader, load
+from pitwall.site_data import export
 
 FIRST_SEASON = 2023  # OpenF1 historical coverage starts here
 log = logging.getLogger("pitwall")
@@ -32,7 +34,18 @@ def main(
     selector.add_argument("--meeting", type=int, metavar="MEETING_KEY", help="one Grand Prix")
     selector.add_argument("--season", type=int, metavar="YEAR", help="backfill a whole season")
     commands.add_parser("load", help="rebuild BigQuery raw tables from the lake")
+    site = commands.add_parser("site-export", help="write the lab site's pitwall data files")
+    site.add_argument("--out", required=True, help="directory to write the Parquet files into")
     args = parser.parse_args(argv)
+
+    if args.command == "site-export":  # reads the marts only: no lake needed
+        project = os.environ.get("PITWALL_BQ_PROJECT")
+        if not project:
+            parser.error("PITWALL_BQ_PROJECT is not set (the GCP project holding the marts)")
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+        written = export(Path(args.out), project=project)
+        log.info("site data: %s", written)
+        return 0
 
     if args.command == "ingest" and args.season is not None and args.season < FIRST_SEASON:
         parser.error(f"OpenF1 has data from {FIRST_SEASON} onwards")

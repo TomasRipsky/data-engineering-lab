@@ -1,13 +1,15 @@
 # pitwall
 
-> Batch ELT over Formula 1 data (OpenF1 → GCS → BigQuery → dbt → Evidence) that explains race strategy — tyres, pit stops and the undercut — to people who don't follow F1.
+> Batch ELT over Formula 1 data (OpenF1 → GCS → BigQuery → dbt → Observable site) that explains race strategy — tyres, pit stops and the undercut — to people who don't follow F1.
+
+**Live dashboard:** https://tomasripsky.github.io/data-engineering-lab/pitwall/
 
 ## Architecture
 
 ```mermaid
 flowchart LR
   api[OpenF1 API] --> ingest[pitwall ingest] --> lake[(Raw lake: Parquet + markers)]
-  lake --> load[pitwall load] --> bq[(BigQuery raw)] --> dbt[dbt: staging → marts] -. Plan 4 .-> site[Evidence on GitHub Pages]
+  lake --> load[pitwall load] --> bq[(BigQuery raw)] --> dbt[dbt: staging → marts] --> export[site-export] --> site[Lab site on GitHub Pages]
 ```
 
 ## Tech stack
@@ -20,6 +22,7 @@ flowchart LR
 | Infrastructure | Terraform + `make bootstrap` | One root, workspace per env, no keys (Workload Identity Federation) |
 | Transformation | dbt (BigQuery) | Tested SQL with stated grains; unit tests pin the racing rules |
 | Orchestration | GitHub Actions (cron + manual dispatch) | Free, public runs, WIF auth — [ADR 0006](docs/decisions/0006-github-actions-as-orchestrator.md) |
+| Dashboard | Observable Framework (lab site) | Static, keyless, shared structure + own look — [ADR 0007](docs/decisions/0007-observable-framework-for-the-dashboard.md) |
 
 ## Run it
 
@@ -31,6 +34,7 @@ make apply                          # ENV=dev by default
 make ingest ARGS="--season 2025"    # OpenF1 → gs://pitwall-tr-dev-raw (~15 min: 30 requests/min limit)
 make load                           # lake → BigQuery raw.openf1_* tables
 make transform                      # dbt build: staging → intermediate → marts, with tests
+make site-preview                   # lab site with dev data on http://127.0.0.1:3000
 PITWALL_LAKE_URI=.lake make ingest ARGS="--meeting 1255"   # offline: local lake
 ```
 

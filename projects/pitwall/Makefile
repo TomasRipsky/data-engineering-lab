@@ -1,4 +1,4 @@
-.PHONY: setup test lint fmt ingest load transform bootstrap init plan apply destroy gh-vars
+.PHONY: setup test lint fmt ingest load transform site-data site site-preview bootstrap init plan apply destroy gh-vars
 
 ENV ?= dev
 PROJECT_PREFIX ?= pitwall-tr
@@ -42,6 +42,17 @@ transform/profiles.yml: transform/profiles.yml.example
 transform: transform/profiles.yml ## Build and test the dbt models in $(PROJECT_ID)
 	cd transform && uv run dbt deps --quiet && uv run dbt build --target $(ENV) --profiles-dir .
 
+SITE_DIR := ../../site
+
+site-data: ## Export pitwall's section data from $(PROJECT_ID) marts into the lab site
+	uv run pitwall site-export --out $(SITE_DIR)/src/pitwall/data
+
+site: site-data ## Build the whole lab site into site/dist
+	cd $(SITE_DIR) && npm ci --silent --ignore-scripts && npm run build
+
+site-preview: site-data ## Live-reloading lab site on http://127.0.0.1:3000
+	cd $(SITE_DIR) && npm ci --silent --ignore-scripts && npm run dev
+
 bootstrap: ## One-off per env: create project, link billing, budget alert. BILLING_ACCOUNT=XXXXXX-XXXXXX-XXXXXX ORG_ID=XXXXXXXXXXXX
 	@test -n "$(BILLING_ACCOUNT)" || { echo "set BILLING_ACCOUNT (see: gcloud billing accounts list)"; exit 1; }
 	@test -n "$(ORG_ID)" || { echo "set ORG_ID (see: gcloud organizations list)"; exit 1; }
@@ -69,3 +80,4 @@ gh-vars: init ## Publish ENV's project, WIF provider and service account to the 
 	gh variable set PITWALL_PROJECT --env $(ENV) --body "$(PROJECT_ID)"
 	gh variable set PITWALL_WIF_PROVIDER --env $(ENV) --body "$$($(TF) output -raw workload_identity_provider)"
 	gh variable set PITWALL_SERVICE_ACCOUNT --env $(ENV) --body "$$($(TF) output -raw pipeline_service_account)"
+	if [ "$(ENV)" = "prod" ]; then gh variable set PITWALL_DASHBOARD_SERVICE_ACCOUNT --env prod --body "$$($(TF) output -raw dashboard_service_account)"; fi
