@@ -17,7 +17,7 @@ How work is done in this lab. `CLAUDE.md` holds the hard rules Claude always loa
 
 **Commits** — [Conventional Commits](https://www.conventionalcommits.org/) with a scope: the project name (`feat(pitwall): ...`), `lab` for lab-level changes, or `agent` for changes to Claude's own system (skills, agents, hooks, `agent/`).
 
-**Releases** — the lab is versioned with SemVer and a [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) `CHANGELOG.md`.
+**Releases** — Tomas runs `/release X.Y.Z` (the `release` skill, user-invoked only). The lab is versioned with SemVer and a [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) `CHANGELOG.md`.
 1. Branch `chore/<issue#>-release-vX.Y.Z` from `dev`, move `CHANGELOG.md` `[Unreleased]` → `[X.Y.Z] - <date>`, PR into `dev`.
 2. PR `dev → main` titled `release: vX.Y.Z`, merged with a **merge commit** (not squash), so `main` keeps the release boundaries.
 3. `gh release create vX.Y.Z --target main`.
