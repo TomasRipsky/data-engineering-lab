@@ -42,7 +42,7 @@ transform/profiles.yml: transform/profiles.yml.example
 transform: transform/profiles.yml ## Build and test the dbt models in $(PROJECT_ID)
 	cd transform && uv run dbt deps --quiet && uv run dbt build --target $(ENV) --profiles-dir .
 
-bootstrap: ## One-off per env: create project, link billing, budget alert. BILLING_ACCOUNT=XXXXXX-XXXXXX-XXXXXX ORG_ID=651783965785
+bootstrap: ## One-off per env: create project, link billing, budget alert. BILLING_ACCOUNT=XXXXXX-XXXXXX-XXXXXX ORG_ID=XXXXXXXXXXXX
 	@test -n "$(BILLING_ACCOUNT)" || { echo "set BILLING_ACCOUNT (see: gcloud billing accounts list)"; exit 1; }
 	@test -n "$(ORG_ID)" || { echo "set ORG_ID (see: gcloud organizations list)"; exit 1; }
 	gcloud projects create $(PROJECT_ID) --name="pitwall $(ENV)" --organization=$(ORG_ID)

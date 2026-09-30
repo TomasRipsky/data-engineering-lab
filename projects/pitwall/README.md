@@ -86,7 +86,7 @@ Known real-race outliers that only warn: red-flag pit stops of up to 22 minutes,
 
 ## Cost & teardown
 
-Per environment: one GCP project with a GCS bucket (MBs), four BigQuery datasets, a service account
+Per environment: one GCP project with a GCS bucket (MBs), five BigQuery datasets (raw, staging, intermediate, marts, audit), a service account
 and a Workload Identity pool. **Expected cost: 0/month** — everything stays in the free tier.
 Guards: a budget alert (warns at 50/90/100 % of 5 EUR) and a 50 GiB/day BigQuery query quota
 (stops runaway queries; the default is 200 TiB/day).

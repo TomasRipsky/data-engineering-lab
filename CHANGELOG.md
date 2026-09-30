@@ -6,6 +6,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 ## [Unreleased]
 
 ### Added
+- `pitwall`: CI (lint, tests, terraform validate, dbt in per-PR datasets) and a scheduled/manual pipeline via Workload Identity Federation; production environment backfilled 2023 → 2026.
 - `pitwall`: dbt project (staging → intermediate → marts) with tyre degradation, pit stops and undercut detection; unit-tested racing rules; data-quality rules on raw data with failing rows stored in an `audit` dataset.
 - `pitwall`: GCP dev environment (Terraform, WIF, query quota, budget) and `pitwall load` rebuilding BigQuery raw tables from the lake.
 - `pitwall`: OpenF1 extractor (`pitwall ingest`) writing contract-checked Parquet to a raw lake, idempotent per Grand Prix.
