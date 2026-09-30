@@ -24,4 +24,3 @@ repos:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
-        exclude: /design/(plans|specs)/  # specs and plans are records, not code

@@ -18,11 +18,11 @@ Chat in Spanish. Code, commits, READMEs, ADRs, docs and the vault in English.
 - **Git:** never commit or push to `main` or `dev`. Every change: issue → `<type>/<issue#>-<slug>` from `dev` → PR into `dev` with `Closes #n` → squash merge. Conventional Commits, scope = project, `lab` or `agent`.
 - Before merging a non-trivial PR, run the `pr-reviewer` agent on its branch and fix Critical/Important findings. I may squash-merge into `dev` once CI and review are green; after merging, verify the issue actually closed.
 - **Releases and PRs into `main` only with Tomas's explicit OK.** Procedure: [lab/conventions.md](lab/conventions.md).
-- **Confirm first:** anything destructive, billable or public. State the expected cost before creating billable resources; budget alert before the first deploy; `make destroy` implemented and tested before anything is left running.
+- **Confirm first:** anything destructive, billable or public. **Free tier first**; no always-on compute without a reason. State the expected cost before creating billable resources; budget alert before the first deploy; `make destroy` implemented and tested before anything is left running.
 - **Secrets never enter the repo** (public). Never read or print `.env` files or credentials. Fresh clone → `pre-commit install` before the first commit.
 - **Verify, don't assume:** library/cloud APIs change — check current docs (Context7 MCP) before relying on memory.
 - Durable decisions → ADR (`lab/adr/` or `projects/<p>/docs/decisions/`). New concepts → vault note.
-- Python: `uv`, `ruff`, `pytest`, ≥ 3.12. SQL: lowercase, CTEs, one model = one grain (stated). Full conventions: [lab/conventions.md](lab/conventions.md); security & cost: [lab/security-and-cost.md](lab/security-and-cost.md).
+- Python: `uv`, `ruff`, `pytest`, ≥ 3.12. SQL: lowercase, CTEs, one model = one grain (stated). Terraform: one root module per cloud per project, remote state only when shared. Config via environment variables; only `.env.example` is committed. Full conventions: [lab/conventions.md](lab/conventions.md); security & cost: [lab/security-and-cost.md](lab/security-and-cost.md).
 
 ## Where things live (one question → one place)
 - `README.md` world map · `agent/` how I work and evolve · `lab/` rules, ADRs, tech radar, lab designs

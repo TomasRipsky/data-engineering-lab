@@ -8,7 +8,7 @@ The walkthrough: read this after the [README](../README.md) to understand the in
 
 ## Architecture
 
-*The diagram, then one paragraph per box: what it does, what it hands to the next box.*
+*Build on the README diagram (don't redraw it): one paragraph per box — what it does, what it hands to the next box.*
 
 ## The data journey
 

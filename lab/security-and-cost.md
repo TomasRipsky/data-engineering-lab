@@ -7,7 +7,7 @@ This repository is **public**. Everything here is written assuming anyone can re
 - Secrets never enter the repo. Configuration comes from environment variables; only `.env.example` is committed, and `.gitignore` blocks `.env*`, keys, credentials JSON and `*.tfvars`.
 - [gitleaks](https://github.com/gitleaks/gitleaks) scans every commit through pre-commit, alongside `detect-private-key` and a branch guard that rejects commits to `main` and `dev`.
 - On any fresh clone or new machine, run `pre-commit install` before the first commit — without it no hook runs.
-- Claude never reads or prints `.env` files or credentials (enforced by deny rules in `.claude/settings.json`).
+- Claude never reads or prints `.env` files or credentials. Partly enforced: deny rules in `.claude/settings.json` block reading `.env` variants; other secret files (`*credentials*.json`, `*.tfvars`, keys) rely on the rule itself.
 - CI authenticates to the cloud with short-lived federated identities (Workload Identity Federation), not long-lived keys; public-facing builds use read-only identities (pitwall ADR 0006, `site/README.md`).
 
 ## Cloud cost

@@ -27,7 +27,7 @@ The full protocol and the vault note standard: `tutoring.md` (Lab 1.0, plan B).
 
 Three tiers ([lab ADR 0004](../lab/adr/0004-three-tier-memory-architecture.md)) — keep each better, not bigger:
 
-- **Hot — Claude's file memory** (outside the repo): Tomas's preferences, agreements, project states. A short index loaded in every session; consolidated at retros.
+- **Hot — Claude's file memory** (outside the repo): Tomas's preferences, agreements, project states. Its index is loaded in every session and stays ≤ ~40 lines (ADR 0004): one line per memory, details in the files. Consolidated at retros.
 - **Warm — this repo:** `CLAUDE.md`, `agent/`, `lab/` (conventions, ADRs, designs), project docs and git history.
 - **Deep — the Obsidian second brain** (private repo): concepts and technologies explained with our own cases, project notes, private ideas.
 

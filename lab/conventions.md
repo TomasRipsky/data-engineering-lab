@@ -27,7 +27,7 @@ Releases and PRs into `main` need Tomas's explicit OK.
 ## Python
 
 - `uv` for environments and dependencies (`uv.lock` committed per project), `ruff` for lint and format, `pytest` for tests.
-- Python ≥ 3.12. Each project has its own `pyproject.toml`; there is no root workspace (lab ADR 0002).
+- Python ≥ 3.12. Each project has its own `pyproject.toml`; there is no root workspace (lab ADR 0001).
 
 ## SQL
 
