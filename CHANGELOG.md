@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-30
+
 ### Changed
 - Repo restructured into the world (`lab/`, `agent/`) and countries (`projects/`) model: lab ADRs and designs live in `lab/`, project specs and plans in `projects/<p>/docs/design/`, and `docs/` is gone ([lab ADR 0006](lab/adr/0006-world-and-countries-structure.md)).
 - `CLAUDE.md` rewritten as a short constitution of hard rules; `README.md` is now the world map.
