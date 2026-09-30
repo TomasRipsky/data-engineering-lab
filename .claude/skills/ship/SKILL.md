@@ -26,7 +26,8 @@ gh pr create --base dev --title "<conventional title>" --body-file "$BODY_FILE"
 ```
 The body starts with `Closes #$ISSUE`, then a summary, verification results, and ends with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`. Write it to a file first (quotes and backticks survive).
 
-## 3. Check the issue link before merging
+## 3. Check the issue link (early warning)
+Right after `gh pr create`, GitHub may not have computed the link yet — a "not linked" here can be a false negative. Re-run in a minute; step 6 enforces it as a gate.
 ```bash
 ISSUE=$(git branch --show-current | sed -nE 's#^[a-z]+/([0-9]+)-.*#\1#p'); : "${ISSUE:?not a work branch}"
 PR=$(gh pr view --json number -q .number); : "${PR:?no PR for this branch}"
@@ -46,12 +47,14 @@ Non-trivial change (pipeline, SQL model, infra, dependency, workflow, hook, skil
 - Anything declined is a ruling with its cost-if-wrong, reported to Tomas.
 
 ## 6. Merge and close the issue
-One block, so `ISSUE` and `PR` are still known after the branch is deleted:
+Gates, in order: issue linked → checks not pending → checks not failing → head unchanged since review. One block, so `ISSUE` and `PR` are still known after the branch is deleted:
 ```bash
 ISSUE=$(git branch --show-current | sed -nE 's#^[a-z]+/([0-9]+)-.*#\1#p'); : "${ISSUE:?not a work branch}"
 PR=$(gh pr view --json number -q .number); : "${PR:?no PR for this branch}"
 gh pr checks "$PR" >/dev/null 2>&1; rc=$?   # 0 = all passed, 8 = pending, other = failed or none reported
-if [[ $rc -eq 8 ]]; then echo "STOP: checks pending"
+if ! gh pr view "$PR" --json closingIssuesReferences -q '.closingIssuesReferences[].number' | grep -qx "$ISSUE"; then
+  echo "STOP: issue #$ISSUE not linked to PR #$PR (fix the body; re-run in a minute if the PR is brand new)"
+elif [[ $rc -eq 8 ]]; then echo "STOP: checks pending"
 elif [[ $rc -ne 0 ]] && ! gh pr checks "$PR" 2>&1 | grep -q "no checks reported"; then echo "STOP: checks failing"
 elif gh pr merge "$PR" --squash --delete-branch --match-head-commit "$(git rev-parse HEAD)"; then
   git switch dev && git pull --ff-only      # gh may leave local dev behind

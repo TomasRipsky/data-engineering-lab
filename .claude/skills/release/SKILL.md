@@ -38,6 +38,9 @@ NOTES="${TMPDIR:-/tmp}/release-v$ARGUMENTS.md"   # outside the repo
 { echo "## Lab"; awk -v v="$ARGUMENTS" '$0 ~ "^## \\[" v "\\]"{f=1;next}/^## \[/{f=0}f' CHANGELOG.md
   echo; echo "## Agent"; awk -v v="$ARGUMENTS" '$0 ~ "^## \\[" v "\\]"{f=1;next}/^## \[/{f=0}f' agent/CHANGELOG.md
   echo; echo "🤖 Generated with [Claude Code](https://claude.com/claude-code)"; } > "$NOTES"
+# relative repo links do not resolve on the releases page: make them absolute to main
+B="https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/blob/main"
+perl -pi -e "s#\]\(\.\./#](#g; s#\]\((lab|agent|projects|site)/#]($B/\$1/#g" "$NOTES"
 wc -l "$NOTES"
 ```
 
@@ -54,9 +57,9 @@ gh pr merge "$MAIN_PR" --merge
 ```
 
 ## 5. GitHub release (public — show Tomas first)
-Show Tomas the notes file and wait for his OK, then:
+Show Tomas the notes file and wait for his OK, then (replace the theme placeholder, as in earlier titles like `v0.4.0 — lab site and pitwall dashboard`):
 ```bash
-gh release create "v$ARGUMENTS" --target main --title "v$ARGUMENTS" --notes-file "${TMPDIR:-/tmp}/release-v$ARGUMENTS.md"
+gh release create "v$ARGUMENTS" --target main --title "v$ARGUMENTS — <one-line theme>" --notes-file "${TMPDIR:-/tmp}/release-v$ARGUMENTS.md"
 git fetch -q origin && git diff --quiet origin/main origin/dev -- . && echo "main == dev"
 ```
 
