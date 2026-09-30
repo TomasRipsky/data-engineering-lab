@@ -13,6 +13,10 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+# Lap time gained per lap as fuel burns (about 1.7 kg of fuel per lap x ~0.03 s per kg).
+# A common modelling assumption in F1 analysis, shown and explained on the site.
+FUEL_S_PER_LAP = 0.055
+
 QUERIES: dict[str, str] = {
     "races": """
         select
@@ -75,18 +79,21 @@ QUERIES: dict[str, str] = {
             on d.session_key = p.session_key and d.driver_number = p.driver_number
     """,
     # Each clean lap compared with its own stint's average: removes car and driver pace, leaving
-    # the effect of tyre age (minus the fuel effect, explained on the site).
+    # the effect of tyre age. Cars also get lighter as fuel burns, which hides wear, so a second
+    # curve adds back FUEL_S_PER_LAP for every lap already run.
     "tyre_wear": """
         with clean as (
             select
                 l.session_key,
                 l.compound,
                 l.tyre_age_laps,
-                l.lap_time_s - avg(l.lap_time_s) over (
-                    partition by l.session_key, l.driver_number, l.stint_number
-                ) as delta_s
+                l.lap_time_s - avg(l.lap_time_s) over stint as delta_s,
+                (l.lap_time_s + __FUEL__ * l.lap_number)
+                    - avg(l.lap_time_s + __FUEL__ * l.lap_number) over stint
+                    as delta_fuel_corrected_s
             from `{project}.marts.fct_laps` as l
             where l.is_clean_lap and l.compound in ('SOFT', 'MEDIUM', 'HARD')
+            window stint as (partition by l.session_key, l.driver_number, l.stint_number)
         )
 
         select
@@ -94,13 +101,15 @@ QUERIES: dict[str, str] = {
             clean.compound,
             clean.tyre_age_laps,
             round(approx_quantiles(clean.delta_s, 2)[offset(1)], 3) as median_delta_s,
+            round(approx_quantiles(clean.delta_fuel_corrected_s, 2)[offset(1)], 3)
+                as median_delta_fuel_corrected_s,
             count(*) as laps
         from clean
         inner join `{project}.marts.dim_sessions` as s on s.session_key = clean.session_key
         inner join `{project}.marts.dim_meetings` as m on m.meeting_key = s.meeting_key
         group by 1, 2, 3
         having count(*) >= 5
-    """,
+    """.replace("__FUEL__", str(FUEL_S_PER_LAP)),
     "undercuts": """
         select
             u.session_key,

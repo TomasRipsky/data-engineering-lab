@@ -68,3 +68,14 @@ def test_queries_only_read_marts():
         tables = re.findall(r"`([^`]+)`", sql)
         assert tables and all(t.startswith("{project}.marts.") for t in tables), name
         assert not re.search(r"\b(insert|update|delete|merge|create|drop)\b", sql, re.I), name
+
+
+def test_tyre_wear_offers_a_fuel_corrected_curve():
+    # Cars get ~FUEL_S_PER_LAP faster each lap as fuel burns; the site shows both views.
+    from pitwall.site_data import FUEL_S_PER_LAP
+
+    assert 0.03 <= FUEL_S_PER_LAP <= 0.06
+    assert "median_delta_fuel_corrected_s" in QUERIES["tyre_wear"]
+    assert "{fuel_s_per_lap}" not in QUERIES["tyre_wear"].format(
+        project="p", fuel_s_per_lap=FUEL_S_PER_LAP
+    )
