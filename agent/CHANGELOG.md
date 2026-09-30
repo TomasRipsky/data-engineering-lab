@@ -5,6 +5,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- **`ship`: the issue-link check is a gate inside the merge step.** Right after PR creation GitHub may not have computed the link yet (false "not linked"), and an advisory STOP in an earlier step was ignored by a scripted run during the v1.0.0 release.
+- **Closing pass before a conversation ends** (CLAUDE.md): Tomas deletes finished conversations, so decisions, lessons, state and the next step are persisted before a milestone closes.
+
 ## [1.0.0] - 2026-09-30
 
 ### Added

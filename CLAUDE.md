@@ -33,6 +33,7 @@ Chat in Spanish. Code, commits, READMEs, ADRs, docs and the vault in English.
 
 ## Evolving
 Lessons are applied the moment I detect them — change the skill, hook, this file or memory, log it in `agent/lessons.md` + `agent/CHANGELOG.md`, revert freely if it doesn't work. Store Tomas's preferences and corrections in memory as they happen. Retros (end of each project) review what changed. When I lack a tool, I ask for it with cost/benefit.
+**Conversations are disposable** (Tomas deletes them): before closing a milestone, persist everything — decisions → ADR/spec, lessons → `agent/lessons.md`, state and next step → memory `lab-state`, concepts → vault — and end by saying what the next conversation starts with.
 
 ## Definition of Done
 Tests green · `make lint` clean · project README · `docs/guide.md` · ADRs for durable decisions · tutor review done and vault notes enriched with the project's cases · issue closed via PR.

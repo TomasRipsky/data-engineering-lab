@@ -36,6 +36,7 @@ Lessons learned the hard way, each turned into a rule that prevents it. A lesson
 - **Symptom:** several PRs squash-merged into `dev` (the default branch) left their issue open although the body started with `Closes #n` — #33 included; #19 with the same format closed.
 - **Cause:** unknown, and intermittent: GitHub registers the link (`closingIssuesReferences` lists the issue), so parsing is not the problem, and waiting 30+ minutes did not help. With the same flow, #32 (PR #33) stayed open while #34 (PR #35, merged by the `ship` skill with `--match-head-commit`) closed on its own.
 - **Rule:** check the link before merging and the issue state after; close it manually with "Delivered by #<pr>" if still open.
+- **Update (v1.0.0 release):** right after `gh pr create`, `closingIssuesReferences` can be empty for a few seconds (eventual consistency) — a check run immediately gives a false "not linked". The link check therefore runs as a gate just before the merge, not only right after creation.
 - **Applied in:** `.claude/skills/ship/` (steps 3 and 7).
 
 ### A procedure is untested until its first real run
@@ -55,6 +56,12 @@ Lessons learned the hard way, each turned into a rule that prevents it. A lesson
 - **Cause:** three things at once. Claude Code reloads `settings.json` asynchronously, so a read right after an edit ran under the *previous* rules. Rule patterns have no bracket negation: `[!e]` and `[^e]` are literal classes (`{!, e}`, `{^, e}`). And the Read tool caches unchanged files, so re-reading a decoy proves nothing.
 - **Rule:** test deny rules with decoy files whose content changes between rounds, re-test after the reload has had time to happen, cover both "must be denied" and "must stay readable"; enumerate names instead of relying on negation.
 - **Applied in:** `.claude/settings.json`, `lab/security-and-cost.md`.
+
+### A warning is not a gate
+- **Symptom:** during the v1.0.0 release, `ship` step 3 printed "STOP: issue not linked", and the merge in step 6 ran anyway because both steps were executed in one scripted loop.
+- **Cause:** step 3 only printed a message; nothing in step 6 depended on it. A human reads a STOP; a script (or an agent batching steps) does not.
+- **Rule:** any check that must prevent an action lives in the same block as the action, as a condition on it. Messages are for information, conditions are for safety.
+- **Applied in:** `.claude/skills/ship/` step 6 (link, pending, failing and head-commit gates before `gh pr merge`).
 
 ### A hidden browser pane pauses Observable
 - **Symptom:** while verifying the pitwall site, screenshots showed stale or empty charts although the data was right.
