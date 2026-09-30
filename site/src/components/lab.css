@@ -18,7 +18,7 @@ a.card:hover {
   outline: 2px solid var(--theme-foreground-focus);
 }
 
-/* "What am I looking at?" boxes stand out on every theme */
+/* "What am I looking at?" boxes (<div class="tip" label="What am I looking at?">) on every theme */
 .tip {
   border-left-width: 4px;
 }

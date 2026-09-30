@@ -21,7 +21,7 @@ One GitHub Pages site for the whole lab: https://tomasripsky.github.io/data-engi
    Design charts with the `dataviz` skill (validated palettes, one axis, legends, tooltips).
 4. **Page skeleton** (every page):
    - H1 phrased as the question the page answers;
-   - `<div class="tip">` starting with **What am I looking at?** in plain language;
+   - `<div class="tip" label="What am I looking at?">` explaining the page in plain language;
    - the charts;
    - `<div class="note">` with the limitations.
 5. **Browser-friendly data**: no 64-bit integers (they arrive as `BigInt`) and no timestamps

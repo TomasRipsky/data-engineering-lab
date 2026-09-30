@@ -1,0 +1,205 @@
+/* pitwall theme: a dark pit-wall screen. Shared structure comes from lab.css. */
+@import url("https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;0,700;0,900;1,900&display=swap");
+@import url("observablehq:default.css");
+@import url("observablehq:theme-near-midnight.css");
+@import url("../components/lab.css");
+
+:root {
+  --pw-surface: #15151e;
+  --pw-panel: #1f1f2b;
+  --pw-line: #2e2e3d;
+  --pw-ink: #f0f0f0;
+  --pw-muted: #a3a3b3;
+  --pw-red: #e10600;
+  --theme-background: var(--pw-surface);
+  --theme-background-alt: var(--pw-panel);
+  --theme-foreground: var(--pw-ink);
+  --theme-foreground-muted: var(--pw-muted);
+  --theme-foreground-faint: #6b6b7b;
+  --theme-foreground-faintest: var(--pw-line);
+  --theme-foreground-focus: var(--pw-red);
+  --sans-serif: "Titillium Web", system-ui, -apple-system, sans-serif;
+  --serif: var(--sans-serif);
+}
+
+body {
+  background: var(--pw-surface);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--sans-serif);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.card {
+  background: var(--pw-panel);
+  border: 1px solid var(--pw-line);
+}
+
+.tip {
+  background: var(--pw-panel);
+  border-left-color: var(--pw-red);
+}
+
+.tip::before {
+  color: var(--pw-red);
+}
+
+.big {
+  color: var(--pw-ink);
+}
+
+/* The one hero figure per page */
+.huge {
+  display: block;
+  font-size: 3.6rem;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--pw-ink);
+}
+
+/* Hero banner with the car illustration */
+.pw-hero {
+  position: relative;
+  overflow: hidden;
+  min-height: 250px;
+  margin: 1rem 0 0;
+  padding: 2rem 2rem 2.5rem;
+  border-radius: var(--lab-radius) var(--lab-radius) 0 0;
+  background:
+    radial-gradient(circle at 85% 70%, rgba(225, 6, 0, 0.35), transparent 55%),
+    linear-gradient(100deg, #15151e 35%, #22101a 100%);
+}
+
+.pw-hero h1 {
+  position: relative;
+  max-width: 17ch;
+  margin: 0.2rem 0 0.6rem;
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1.05;
+}
+
+.pw-hero p {
+  position: relative;
+  max-width: 42ch;
+  color: var(--pw-muted);
+}
+
+.pw-eyebrow {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--pw-red) !important;
+}
+
+.pw-hero .pw-car {
+  position: absolute;
+  right: -30px;
+  bottom: 0;
+  width: min(58%, 560px);
+  height: auto;
+}
+
+/* Red-and-white kerb under the hero */
+.pw-kerb {
+  height: 10px;
+  margin-bottom: 2rem;
+  border-radius: 0 0 4px 4px;
+  background: repeating-linear-gradient(90deg, var(--pw-red) 0 28px, var(--pw-ink) 28px 56px);
+}
+
+/* Tyre badges and legends */
+.pw-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+  align-items: center;
+  margin: 0.5rem 0 0.25rem;
+  color: var(--pw-muted);
+  font-size: 0.9rem;
+}
+
+.pw-legend span {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.pw-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.pw-question {
+  text-decoration: none;
+}
+
+.pw-question h2,
+.pw-question p {
+  color: var(--pw-ink);
+}
+
+.pw-question p {
+  color: var(--pw-muted);
+}
+
+.pw-question h2 {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.pw-lap {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0;
+  margin: 1.5rem 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+
+.pw-lap li {
+  position: relative;
+  padding: 0.9rem 0.9rem 1rem;
+  border-top: 4px solid var(--pw-red);
+  background: var(--pw-panel);
+}
+
+.pw-lap li:nth-child(even) {
+  border-top-color: var(--pw-ink);
+}
+
+.pw-lap li + li {
+  border-left: 1px solid var(--pw-line);
+}
+
+.pw-lap strong {
+  display: block;
+  margin-top: 0.4rem;
+}
+
+.pw-lap small {
+  color: var(--pw-muted);
+}
+
+.pw-sector {
+  font-size: 0.75rem;
+  font-weight: 900;
+  font-style: italic;
+  color: var(--pw-red);
+}
+
+@media (max-width: 640px) {
+  .pw-hero .pw-car {
+    position: relative;
+    right: 0;
+    width: 100%;
+  }
+}
