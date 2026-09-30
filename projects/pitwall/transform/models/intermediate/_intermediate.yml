@@ -23,6 +23,59 @@ models:
               arguments:
                 values: [SC, VSC]
 
+  - name: int_laps_enriched
+    description: >
+      Grain: one row per lap of one driver in one session. Each lap carries its tyres (compound,
+      tyre age), whether it began or ended in the pits, any safety car, and the running order at
+      the end of the lap. A **clean lap** is one that says something about tyre wear: not lap 1,
+      not an in- or out-lap, no SC/VSC, has a time, and is no slower than 1.2 × the session's
+      median lap (this removes red-flag and damage laps).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_key, driver_number, lap_number]
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+      - name: driver_number
+        description: "{{ doc('driver_number') }}"
+      - name: lap_number
+        description: "{{ doc('lap_number') }}"
+      - name: started_at
+        description: When the lap started (UTC).
+      - name: ended_at
+        description: When the lap ended (UTC) — start plus lap time, or the next lap's start when either is missing.
+      - name: lap_time_s
+        description: Lap time in seconds.
+      - name: sector_1_s
+        description: First-sector time in seconds.
+      - name: sector_2_s
+        description: Second-sector time in seconds.
+      - name: sector_3_s
+        description: Third-sector time in seconds.
+      - name: speed_trap_kph
+        description: Top speed at the speed trap (km/h).
+      - name: stint_number
+        description: Which set of tyres this lap was driven on (1 = starting set).
+      - name: compound
+        description: "{{ doc('compound') }}"
+      - name: tyre_age_laps
+        description: "{{ doc('tyre_age_laps') }}"
+      - name: is_pit_in_lap
+        description: True if the driver entered the pits at the end of this lap.
+      - name: is_pit_out_lap
+        description: True if this lap started in the pit lane.
+      - name: neutralisation
+        description: "{{ doc('neutralisation') }}"
+      - name: position_end_of_lap
+        description: "{{ doc('position') }}"
+      - name: session_median_lap_time_s
+        description: Median lap time of the whole session, used to spot abnormally slow laps.
+      - name: is_clean_lap
+        description: True when the lap is representative of tyre performance (see model description).
+
 unit_tests:
   - name: test_neutralised_laps_pair_starts_with_ends
     model: int_neutralised_laps
@@ -66,3 +119,36 @@ unit_tests:
         - {session_key: 2, lap_number: 8, neutralisation: SC}
         - {session_key: 2, lap_number: 9, neutralisation: SC}
         - {session_key: 2, lap_number: 10, neutralisation: SC}
+
+  - name: test_laps_get_tyres_pits_positions_and_clean_flag
+    model: int_laps_enriched
+    given:
+      - input: ref('stg_openf1__laps')
+        rows:
+          - {session_key: 1, meeting_key: 9, driver_number: 4, lap_number: 1, started_at: "2025-03-23 07:00:00", lap_time_s: 90.0, is_pit_out_lap: false}
+          - {session_key: 1, meeting_key: 9, driver_number: 4, lap_number: 2, started_at: "2025-03-23 07:01:30", lap_time_s: 91.0, is_pit_out_lap: false}
+          - {session_key: 1, meeting_key: 9, driver_number: 4, lap_number: 3, started_at: "2025-03-23 07:03:01", lap_time_s: 110.0, is_pit_out_lap: true}
+          - {session_key: 1, meeting_key: 9, driver_number: 4, lap_number: 4, started_at: null, lap_time_s: 91.0, is_pit_out_lap: false}
+          - {session_key: 1, meeting_key: 9, driver_number: 4, lap_number: 5, started_at: "2025-03-23 07:06:22", lap_time_s: 91.5, is_pit_out_lap: false}
+      - input: ref('stg_openf1__stints')
+        rows:
+          - {session_key: 1, driver_number: 4, stint_number: 1, first_lap: 1, last_lap: 2, compound: MEDIUM, tyre_age_at_start: 3}
+          - {session_key: 1, driver_number: 4, stint_number: 2, first_lap: 3, last_lap: 5, compound: HARD, tyre_age_at_start: 0}
+      - input: ref('stg_openf1__pit')
+        rows:
+          - {session_key: 1, driver_number: 4, lap_number: 2}
+      - input: ref('stg_openf1__position')
+        rows:
+          - {session_key: 1, driver_number: 4, recorded_at: "2025-03-23 07:00:05", position: 3}
+          - {session_key: 1, driver_number: 4, recorded_at: "2025-03-23 07:02:00", position: 5}
+          - {session_key: 1, driver_number: 4, recorded_at: "2025-03-23 07:04:00", position: 4}
+      - input: ref('int_neutralised_laps')
+        rows:
+          - {session_key: 1, lap_number: 5, neutralisation: VSC}
+    expect:
+      rows:
+        - {lap_number: 1, compound: MEDIUM, tyre_age_laps: 3, is_pit_in_lap: false, position_end_of_lap: 3, neutralisation: null, is_clean_lap: false}
+        - {lap_number: 2, compound: MEDIUM, tyre_age_laps: 4, is_pit_in_lap: true, position_end_of_lap: 5, neutralisation: null, is_clean_lap: false}
+        - {lap_number: 3, compound: HARD, tyre_age_laps: 0, is_pit_in_lap: false, position_end_of_lap: 4, neutralisation: null, is_clean_lap: false}
+        - {lap_number: 4, compound: HARD, tyre_age_laps: 1, is_pit_in_lap: false, position_end_of_lap: 4, neutralisation: null, is_clean_lap: true}
+        - {lap_number: 5, compound: HARD, tyre_age_laps: 2, is_pit_in_lap: false, position_end_of_lap: 4, neutralisation: VSC, is_clean_lap: false}
