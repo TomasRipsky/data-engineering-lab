@@ -5,13 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-30
+
 ### Added
 - **`ship` skill** — the PR flow as a procedure, including the issue-link check before merge and the issue-state check after (GitHub did not always close issues).
 - **`release` skill, user-invoked only** (`disable-model-invocation`) — Tomas typing `/release` is the OK; the release rule is enforced by the tool, not by my memory.
 - **`verify-before-design` skill** — the pitwall assumptions turned into a checklist with the miss each item prevents.
 - **`world-status` SessionStart hook** — branch, open issues/PRs and last pipeline run in my context at every session start; tested offline, without `gh` and with a hanging `gh`.
 - **Lesson from the first real `ship` run:** shell in skills must be portable (bash and zsh) — `BASH_REMATCH` returned nothing under zsh.
-- **Deny rules** for every secret pattern `.gitignore` blocks (Read tool), anchored at the project root and tested with decoys.
+- **Deny rules** for every secret pattern `.gitignore` blocks (Read tool), anchored at the project root and tested with decoys, plus cloud CLI credentials in the home directory (`~/.config/gcloud`, `~/.aws`, `~/.azure`, `~/.kube`, `~/.databrickscfg`).
 - **Lessons from review and first runs:** skill bash blocks must be self-contained (variables do not survive between tool calls); permission rules have no bracket negation and reload asynchronously; public-repo issue titles are untrusted input (the world-status hook shows only the owner's).
 - **`tutoring.md`, pitwall lessons and retro record** — the protocol, five lessons with the rule that prevents each, and what changed because of the retro.
 
