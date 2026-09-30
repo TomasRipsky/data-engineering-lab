@@ -30,6 +30,7 @@ Work is grouped into **logical blocks** of 2–4 related tasks (e.g. "the stagin
 - **Template:** `09 - Templates/Technology Template.md` (or Concept). Its sections *How it works inside*, *Local vs production*, *In my projects* and *Problems I hit and why* are the ones the tutor reviews feed.
 - **In my projects** cites repo paths and dates: what we built, why it was configured that way.
 - **Problems I hit and why** is written as symptom → cause → fix, from real runs.
+- **Pattern cards:** when a review surfaces a transferable idea Tomas didn't know (the success marker was the model case), it gets a card in `11 - Patterns/` (Pattern template): in short, problem, idea, origin, where you'll meet it, how it's implemented, pitfalls, our case. I own the vault's structure and may reshape it as I learn what works.
 - **Enrich before creating:** extend the existing note; create a new one only when no note covers the concept, and link it from `00 - Home.md`.
 - **Status** moves seed → growing → evergreen as the note gains real cases and survives rereading.
 - Written in English; committed and pushed to the private vault repo at the end of each block or task.
