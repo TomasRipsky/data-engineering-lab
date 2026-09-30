@@ -1,6 +1,6 @@
 ---
 name: new-project
-description: Start a new data engineering project in this lab — creates the GitHub issue, branch from dev, copies projects/_template, renames the package, registers it in the README and opens a PR. Use when Tomas asks to start, create or bootstrap a project.
+description: Start a new data engineering project in this lab — checks the stack is industry-standard, creates the GitHub issue, branch from dev, copies projects/_template (README, docs/guide.md, docs/design/, docs/decisions/), renames the package, registers it in the README and vault, and opens a PR. Use when Tomas asks to start, create or bootstrap a project.
 ---
 
 # New project
@@ -15,6 +15,9 @@ python3 -c "import keyword,sys; n=sys.argv[1]; sys.exit(keyword.iskeyword(n) or 
 [[ -e "projects/$NAME" ]] && { echo "projects/$NAME already exists"; exit 1; }
 ```
 Also reject names equal to a planned dependency (e.g. `pytest`, `pandas`) — ask Tomas for another.
+
+## 1b. Industry-standard check
+For the intended core stack (ingestion, storage, transformation, orchestration, serving), state the market signal of each choice in one line: job-market demand and adoption. Sources: vault `08 - Research/Market Signals 2026.md` and `lab/tech-radar.md`; check current signals (web) when a tech is not there. A niche choice needs an explicit reason Tomas accepts — it becomes an ADR in the project's `docs/decisions/`. If a tech enters Trial, update `lab/tech-radar.md` in the project's PR.
 
 ## 2. Issue and branch
 ```bash
@@ -34,7 +37,7 @@ rsync -a --exclude .venv --exclude .pytest_cache --exclude .ruff_cache --exclude
   projects/_template/ "projects/$NAME/"
 mv "projects/$NAME/src/template_project" "projects/$NAME/src/$PKG"
 grep -rl --exclude-dir=.venv -e template-project -e template_project -e '# Project Name' "projects/$NAME" \
-  | xargs perl -pi -e "s/template-project/$NAME/g; s/template_project/$PKG/g; s/^# Project Name\$/# $NAME/"
+  | xargs perl -pi -e "s/template-project/$NAME/g; s/template_project/$PKG/g; s/^# Project Name\$/# $NAME/; s/^# Project Name — /# $NAME — /"
 ```
 Then fill the placeholders with the Edit tool (not sed — the pitch may contain `/`, `&` or `|`):
 - `projects/$NAME/README.md`: the `> One-sentence pitch...` line → `> $PITCH`.
@@ -62,4 +65,7 @@ git commit -m "feat($NAME): bootstrap project from template"
 git push -u origin HEAD
 gh pr create --base dev --title "feat($NAME): bootstrap project" --body "Closes #$ISSUE"
 ```
-Do not merge — show Tomas the PR link and wait for his OK.
+Merge per `CLAUDE.md` (CI green + `pr-reviewer` for non-trivial changes, then squash-merge into `dev` and verify the issue closed).
+
+## 6. Next
+The project's design starts with brainstorming; its spec and plans go to `projects/$NAME/docs/design/{specs,plans}/`. `docs/guide.md` is filled during the tutor reviews as the project is built.

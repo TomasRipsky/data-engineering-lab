@@ -1,7 +1,7 @@
 # Environment Foundation — Design
 
 - **Date:** 2026-09-29
-- **Status:** Implemented in v0.1.0 (revision 2). Later decisions live in `docs/adr/`.
+- **Status:** Implemented in v0.1.0 (revision 2). Later decisions live in `lab/adr/`; the layout is superseded by `lab/design/specs/2026-09-30-lab-1-0-design.md`.
 - **Scope:** Initial setup of the `data-engineering-lab` monorepo, the Git workflow, Claude's identity and long-term memory, and the Obsidian second brain. No data projects yet.
 
 ## 1. Intent
