@@ -38,6 +38,12 @@ Lessons learned the hard way, each turned into a rule that prevents it. A lesson
 - **Rule:** check the link before merging and the issue state after; close it manually with "Delivered by #<pr>" if still open.
 - **Applied in:** `.claude/skills/ship/` (steps 3 and 7).
 
+### A procedure is untested until its first real run
+- **Symptom:** the first real run of the `ship` skill parsed an empty issue number from `feat/34-lab-1-0-agent`, although `bash -n` had passed.
+- **Cause:** the snippet used `BASH_REMATCH`, which only exists in bash; the Bash tool here runs zsh. `bash -n` checks syntax, not behaviour, and only under bash.
+- **Rule:** shell in skills must be portable across bash and zsh (prefer `sed`/`grep` over shell-specific features) and be exercised once on real input before it is trusted.
+- **Applied in:** `.claude/skills/ship/` step 1.
+
 ### A hidden browser pane pauses Observable
 - **Symptom:** while verifying the pitwall site, screenshots showed stale or empty charts although the data was right.
 - **Cause:** browsers throttle hidden pages; Observable Framework's reactive runtime pauses when the pane is not visible.

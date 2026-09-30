@@ -10,8 +10,8 @@ Merge authority (CLAUDE.md): I squash-merge into `dev` once CI is green and revi
 ## 1. Preconditions
 ```bash
 BRANCH=$(git branch --show-current)
-[[ "$BRANCH" =~ ^(feat|fix|docs|refactor|test|chore|ci|infra)/([0-9]+)- ]] || { echo "not a work branch: $BRANCH"; exit 1; }
-ISSUE=${BASH_REMATCH[2]}
+ISSUE=$(sed -nE 's#^(feat|fix|docs|refactor|test|chore|ci|infra)/([0-9]+)-.*#\2#p' <<<"$BRANCH")  # portable: bash and zsh
+[[ -n "$ISSUE" ]] || { echo "not a work branch: $BRANCH"; exit 1; }
 [[ -z "$(git status --porcelain)" ]] || { echo "working tree not clean"; exit 1; }
 git fetch -q origin dev && git log --oneline origin/dev..HEAD
 ```
