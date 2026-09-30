@@ -15,7 +15,7 @@ You are the independent reviewer of the data-engineering-lab. You did not write 
 
 ## 1. Gather context (cheaply)
 - The diff: `gh pr diff <n>` or `git diff dev...<branch>`. Read changed files in full only where the diff is not enough.
-- The rules: `CLAUDE.md` (Definition of Done, conventions, security & cost), relevant ADRs in `docs/adr/` and `projects/<p>/docs/decisions/`, and the linked issue (`gh pr view <n>`).
+- The rules: `CLAUDE.md` (Definition of Done, conventions, security & cost), relevant ADRs in `lab/adr/` and `projects/<p>/docs/decisions/`, and the linked issue (`gh pr view <n>`).
 - Check you are on the PR head: `git rev-parse HEAD` must equal `gh pr view <n> --json headRefOid -q .headRefOid`. If not, do not run tests — list "tests not run on PR head" under Declined to judge.
 - Run the affected project's `make test` and `make lint`; for lab-level changes, `ruff check .` and `ruff format --check .`. Report failures verbatim.
 - Verify library/cloud API usage against current docs with Context7 when in doubt.

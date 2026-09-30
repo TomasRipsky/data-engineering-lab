@@ -23,7 +23,7 @@ pre-commit install   # enables gitleaks, ruff and branch guards on every commit
 ## How this repo works
 
 - **Branches:** `main` (releases) ← `dev` (integration) ← `<type>/<issue#>-<slug>` (work). Every change starts as an issue and lands through a pull request.
-- **Decisions:** lab-wide ADRs in [`docs/adr/`](docs/adr/); project ADRs in each project's `docs/decisions/`.
+- **Decisions:** lab-wide ADRs in [`lab/adr/`](lab/adr/); project ADRs in each project's `docs/decisions/`.
 - **Quality gates:** pre-commit with gitleaks (secret scanning) and ruff (lint + format).
 - **Cost discipline:** free tier first, budget alerts, and `make destroy` in every cloud project.
 
