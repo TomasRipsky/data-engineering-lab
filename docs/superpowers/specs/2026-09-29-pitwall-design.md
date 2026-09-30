@@ -167,14 +167,14 @@ All GCP access uses **Workload Identity Federation** — no service-account keys
 
 **Known limitation:** GitHub disables scheduled workflows in public repos after 60 days without repository activity (possible in the Dec–Feb off-season). Documented in the README with the one-click re-enable; no keep-alive hack.
 
-## 8. Dashboard (Evidence on GitHub Pages)
+## 8. Dashboard (lab site — ADRs lab 0005, pitwall 0007)
 
-Evidence project in `dashboard/`, reading `pitwall-prod` marts at build time with the read-only `dashboard` service account. The published site is static: visitors never reach BigQuery. Text is in English. Every page opens with a **"What am I looking at?"** box.
+The dashboard is pitwall's section of the **lab site** (`site/`, Observable Framework on GitHub Pages) — one site for every lab project, with shared structure and a per-project look. Evidence was dropped: its current BigQuery connector only accepts service-account key files (blocked by the org policy and the keyless design) and its ADC-capable classic line is frozen.
 
-1. **Home** — what the site is, the glossary, season selector, latest GP summary.
-2. **Race strategy** — pick a GP: one horizontal bar per driver, segmented by stint and coloured by compound, pit stops marked, finishing order.
-3. **Tyre degradation** — pace vs tyre age by compound, filterable by circuit ("how long does a SOFT last at Monaco vs Bahrain?").
-4. **Undercut** — success rate by season, circuit and team, plus the list of attempts, with the definition and its limitations.
+- **Data:** `pitwall site-export` writes six small Parquet files (races, stints, pit stops, fuel-corrected tyre-wear curves, undercut attempts, neutralised laps) into `site/src/pitwall/data/`; in prod it runs as the **read-only dashboard account**. The site never queries BigQuery; the published pages are static.
+- **Pages** (each opens with a "What am I looking at?" box and ends with limitations): home (hero, key figures, glossary), race strategy (stint timeline per driver with tyre letters, pit stops, Safety Car / VSC / red-flag shading, team colours), tyre wear (fuel-corrected by default, toggle to raw), undercut (success rate, by season and team, all attempts), about (the pipeline drawn as a lap).
+- **Look:** dark pit-wall theme with original illustrations (no official imagery); tyre colours validated with the `dataviz` skill (letters on every stint compensate for white/yellow on dark).
+- **Publishing:** the pipeline's `site` job (after a fully successful prod run) exports, builds and uploads; `deploy` publishes to Pages. A release push to `main` republishes without calling the API.
 
 ## 9. Infrastructure, security, cost, teardown
 
@@ -223,12 +223,13 @@ Evidence project in `dashboard/`, reading `pitwall-prod` marts at build time wit
 5. Evidence on GitHub Pages (vs Looker Studio, Streamlit).
 6. Full reload of raw tables in v1.
 7. `force_destroy` on lake buckets.
+8. Observable Framework instead of Evidence for the dashboard (pitwall ADR 0007; the lab site is lab ADR 0005).
 
 ## 13. Risks and items to verify before/while planning
 
 | Item | Check | Fallback |
 |---|---|---|
-| Evidence BigQuery connector with WIF / Application Default Credentials | Context7 / Evidence docs | Export marts to Parquet in the pipeline; Evidence reads the files |
+| ~~Evidence BigQuery connector with WIF / ADC~~ | Resolved: current Evidence needs key files → Observable Framework + `site-export` (ADR 0007) | — |
 | ~~OpenF1 session filter for Race + Sprint~~ | Resolved: `session_type == "Race"` covers both | — |
 | ~~Response size per session~~ | Resolved: largest (`laps`) ≈ 500 KB per race | — |
 | Lab `.gitignore` ignores `*.tfvars` | Plan 2 | Commit `*.tfvars.example` or pass `-var` from the Makefile |

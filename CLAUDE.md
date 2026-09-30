@@ -22,6 +22,7 @@ Chat in Spanish. Code, commits, READMEs, ADRs and the second brain in English.
 - `projects/<name>/` — self-contained projects (own `pyproject.toml`, `uv.lock`, README, `docs/decisions/`, `Makefile`). Start one with `/new-project`; never hand-copy.
 - `projects/_template/` — the skeleton. Improve it when a project teaches us something reusable.
 - `docs/adr/` — lab-level decisions. `docs/superpowers/` — specs and plans.
+- `site/` — the lab's single public site (GitHub Pages). A project with a visual layer adds a section per `site/README.md`: shared structure, its own look, exported data only (ADR 0005).
 - Cloud infra lives inside the project: `projects/<p>/infra/<cloud>/` (Terraform). Extract to `shared/` only when two projects duplicate it.
 
 ## Git workflow
