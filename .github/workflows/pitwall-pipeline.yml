@@ -19,9 +19,13 @@ on:
         description: Meeting key (mode=meeting) or year (mode=season)
         required: false
         default: ""
+  # a release (push to main) reloads, rebuilds and republishes without calling the API
+  push:
+    branches: [main]
+    paths: ["projects/pitwall/**", "site/**"]
 
 concurrency:
-  group: pitwall-pipeline-${{ github.event_name == 'schedule' && 'prod' || inputs.env }}
+  group: pitwall-pipeline-${{ github.event_name == 'workflow_dispatch' && inputs.env || 'prod' }}
   cancel-in-progress: false # never interrupt a run halfway through a load
 
 jobs:
@@ -30,13 +34,13 @@ jobs:
     if: github.event_name != 'schedule' || vars.PITWALL_SCHEDULE == 'on'
     runs-on: ubuntu-latest
     timeout-minutes: 120
-    environment: ${{ github.event_name == 'schedule' && 'prod' || inputs.env }}
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.env || 'prod' }}
     permissions:
       contents: read
       id-token: write
     env:
-      TARGET_ENV: ${{ github.event_name == 'schedule' && 'prod' || inputs.env }}
-      MODE: ${{ github.event_name == 'schedule' && 'latest' || inputs.mode }}
+      TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.env || 'prod' }}
+      MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || (github.event_name == 'schedule' && 'latest' || 'none') }}
       VALUE: ${{ inputs.value }}
     defaults:
       run:
@@ -74,3 +78,76 @@ jobs:
         run: make load ENV="$TARGET_ENV"
       - name: Transform and test
         run: make transform ENV="$TARGET_ENV"
+
+  site-data:
+    needs: run
+    # prod only, and only after ingest → load → transform (every dbt test included) succeeded
+    if: needs.run.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.env == 'prod')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: prod
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: projects/pitwall
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.PITWALL_WIF_PROVIDER }}
+          service_account: ${{ vars.PITWALL_DASHBOARD_SERVICE_ACCOUNT }} # read-only on marts
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - run: uv sync --locked
+      - name: Export the site data from prod marts
+        run: make site-data ENV=prod
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pitwall-site-data
+          path: site/src/pitwall/data
+          retention-days: 1
+
+  site-build:
+    needs: site-data
+    # No id-token here: npm packages run in this job and must never be able to mint GCP tokens.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: pitwall-site-data
+          path: site/src/pitwall/data
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site/dist
+
+  deploy:
+    needs: site-build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

@@ -4,11 +4,13 @@ Hands-on data engineering projects across clouds and open-source stacks — buil
 
 Each project is self-contained under [`projects/`](projects/) with its own README, architecture diagram, decisions (ADRs), tests and teardown instructions.
 
+**Live site:** https://tomasripsky.github.io/data-engineering-lab/
+
 ## Projects
 
 | Project | What it does | Stack | Status |
 |---|---|---|---|
-| [pitwall](projects/pitwall/) | Batch ELT over Formula 1 data (OpenF1 → GCS → BigQuery → dbt → Evidence) that explains race strategy — tyres, pit stops and the undercut — to people who don't follow F1. | TBD | 🌱 bootstrapped |
+| [pitwall](projects/pitwall/) | Batch ELT over Formula 1 data (OpenF1 → GCS → BigQuery → dbt → Observable site) that explains race strategy — tyres, pit stops and the undercut — to people who don't follow F1. | Python · GCS · BigQuery · dbt · GitHub Actions · Observable | ✅ live — [dashboard](https://tomasripsky.github.io/data-engineering-lab/pitwall/) |
 
 ## Getting started
 
