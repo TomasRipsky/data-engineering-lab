@@ -28,6 +28,11 @@ def test_backoff_prefers_retry_after_and_is_capped():
     assert backoff_delay(1, "Wed, 21 Oct 2026 07:28:00 GMT", rng=lambda: 0.0) == 2.0
 
 
+@pytest.mark.parametrize("retry_after", ["-5", "nan", "inf", "-inf"])
+def test_backoff_ignores_negative_or_non_finite_retry_after(retry_after):
+    assert backoff_delay(1, retry_after, rng=lambda: 0.0) == 2.0
+
+
 def test_get_sends_params_and_returns_rows(make_client):
     seen = []
 
