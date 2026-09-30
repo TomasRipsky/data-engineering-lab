@@ -36,9 +36,10 @@ ingest: ## Pull OpenF1 data into $$PITWALL_LAKE_URI (default .lake/). Usage: mak
 load: ## Rebuild BigQuery raw tables in $(PROJECT_ID) from the lake
 	uv run pitwall load
 
-bootstrap: ## One-off per env: create project, link billing, budget alert. BILLING_ACCOUNT=XXXXXX-XXXXXX-XXXXXX
+bootstrap: ## One-off per env: create project, link billing, budget alert. BILLING_ACCOUNT=XXXXXX-XXXXXX-XXXXXX ORG_ID=651783965785
 	@test -n "$(BILLING_ACCOUNT)" || { echo "set BILLING_ACCOUNT (see: gcloud billing accounts list)"; exit 1; }
-	gcloud projects create $(PROJECT_ID) --name="pitwall $(ENV)"
+	@test -n "$(ORG_ID)" || { echo "set ORG_ID (see: gcloud organizations list)"; exit 1; }
+	gcloud projects create $(PROJECT_ID) --name="pitwall $(ENV)" --organization=$(ORG_ID)
 	gcloud billing projects link $(PROJECT_ID) --billing-account=$(BILLING_ACCOUNT)
 	gcloud services enable serviceusage.googleapis.com cloudresourcemanager.googleapis.com billingbudgets.googleapis.com --project=$(PROJECT_ID)
 	gcloud billing budgets create --billing-account=$(BILLING_ACCOUNT) --billing-project=$(PROJECT_ID) \
