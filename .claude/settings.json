@@ -22,7 +22,15 @@
       "Read(./**/.env)",
       "Read(./**/.env.local)",
       "Read(./**/.env.*.local)",
-      "Read(./**/.env.prod*)"
+      "Read(./**/.env.prod*)",
+      "Read(./**/.env.dev*)",
+      "Read(./**/.env.staging*)",
+      "Read(./**/*credentials*.json)",
+      "Read(./**/*service-account*.json)",
+      "Read(./**/*.tfvars)",
+      "Read(./**/*.tfvars.json)",
+      "Read(./**/*.key)",
+      "Read(./**/*.pem)"
     ]
   },
   "enabledMcpjsonServers": [
