@@ -124,6 +124,15 @@ QUERIES: dict[str, str] = {
         inner join `{project}.marts.dim_session_drivers` as d
             on d.session_key = u.session_key and d.driver_number = u.defender_driver_number
     """,
+    # Laps run under the Safety Car, Virtual Safety Car or a red flag, for shading race charts.
+    "neutralisations": """
+        select distinct
+            l.session_key,
+            l.lap_number,
+            l.neutralisation
+        from `{project}.marts.fct_laps` as l
+        where l.neutralisation is not null
+    """,
 }
 
 

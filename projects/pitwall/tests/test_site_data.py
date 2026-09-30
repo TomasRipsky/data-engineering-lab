@@ -56,7 +56,14 @@ def test_export_writes_one_browser_friendly_file_per_query(tmp_path):
 
 
 def test_queries_only_read_marts():
-    assert set(QUERIES) == {"races", "stints", "pit_stops", "tyre_wear", "undercuts"}
+    assert set(QUERIES) == {
+        "races",
+        "stints",
+        "pit_stops",
+        "tyre_wear",
+        "undercuts",
+        "neutralisations",
+    }
     for name, sql in QUERIES.items():
         tables = re.findall(r"`([^`]+)`", sql)
         assert tables and all(t.startswith("{project}.marts.") for t in tables), name
