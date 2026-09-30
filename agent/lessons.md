@@ -75,3 +75,15 @@ Lessons learned the hard way, each turned into a rule that prevents it. A lesson
 - **Rule:** before a move, ask which tools resolve configuration by location (ruff, dbt, Terraform, pytest). Keep moves and edits in separate commits so git still detects the rename. Records (specs, plans) are excluded from formatters.
 - **Applied in:** ruff config of every project (`extend-exclude = ["docs/design"]` in `projects/*/pyproject.toml`, so `make lint` and pre-commit agree) and a root `ruff.toml` for `lab/design` — one place per scope, honoured by `make lint`, `ruff` and pre-commit alike; lab ADR 0006.
 - **Follow-up:** the first fix lived only in pre-commit, so `make lint` still failed; the reviewer then found the lab-level exclude had the same flaw. Exclude in the *tool's* config, not in one caller of the tool.
+
+### A vault note is not an issue
+- **Symptom:** the pitwall tutoring review found that `backoff_delay` passed a negative or NaN `Retry-After` to `time.sleep` (crash on retry). It was written into the vault note *Retries and Rate Limiting*, and nothing else happened until Tomas raised it again (#44).
+- **Cause:** the vault is private, unscheduled and not in the world-status hook; a finding that lives only there has no owner and no due date.
+- **Rule:** a bug found in our code during a review becomes a GitHub issue the same day; the vault note links the fix once it ships.
+- **Applied in:** `agent/tutoring.md` (*How it fails*).
+
+### A prompt that spells out the flow still goes through `ship`
+- **Symptom:** for #44 the prompt listed issue → branch → PR, and I ran those steps by hand. When CI was pending I tried GitHub auto-merge (disabled in this repo) and offered to change the repo setting, when `ship` step 5 already says what to do: read status once, end the turn if pending, resume when Tomas says so.
+- **Cause:** a detailed prompt read as a replacement for the skill, so its gates and its pending-CI rule were skipped.
+- **Rule:** any task that ends in a PR into `dev` is shipped with the `ship` skill; the prompt's steps are input to it, not a substitute.
+- **Applied in:** `CLAUDE.md` (Git rule).
