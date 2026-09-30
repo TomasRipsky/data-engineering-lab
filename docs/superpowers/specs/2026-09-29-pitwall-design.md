@@ -3,6 +3,7 @@
 - **Date:** 2026-09-29
 - **Status:** Approved in brainstorming; awaiting written-spec review.
 - **Issue:** #12
+- **Delivery:** Plans 1–4 build the pipeline (extractor, GCP + loader, dbt, CI/CD + prod); the dashboard (§8) is Plan 5.
 - **Scope:** First data project of the lab. A batch ELT pipeline over Formula 1 data that answers race-strategy questions through a public dashboard. Telemetry is phase 2 (Section 11).
 
 ## 1. Intent
@@ -158,6 +159,8 @@ All GCP access uses **Workload Identity Federation** — no service-account keys
 **`pitwall-pipeline.yml`** — scheduled and manual:
 - Triggers: cron `0 6 * * 1` (Monday 06:00 UTC) → prod `--latest`; `workflow_dispatch` with inputs `env` (dev|prod) and `mode` (`latest` | `meeting=<key>` | `season=<year>`).
 - Steps: `ingest` → `load` → `dbt build` → `evidence build` → deploy to GitHub Pages (prod only).
+- `mode=none` reloads and transforms without ingesting (e.g. after a model change or a release).
+- Per-PR CI datasets include `ci_pr_<n>_audit` (dbt `store_failures`); all four are dropped at the end of the job.
 - Steps are sequential: if dbt tests fail, the dashboard is not redeployed and the last good version stays online. GitHub emails on workflow failure.
 - **Prod runs released code:** prod jobs check out `main`; they run in the GitHub Environment `prod`, and the prod WIF provider only accepts tokens from that environment.
 - A push to `main` touching `projects/pitwall/**` (i.e. a release) runs only `dbt build` → `evidence build` → deploy, so released dashboard and model changes go live without re-ingesting.
