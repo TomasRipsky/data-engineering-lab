@@ -1,0 +1,199 @@
+version: 2
+
+models:
+  - name: dim_sessions
+    description: "Grain: one row per Race or Sprint session that has lap data. The races pitwall analyses."
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+        data_tests: [unique, not_null]
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_meetings')
+                field: meeting_key
+      - name: session_name
+        description: '"Race" (Sunday, full distance) or "Sprint" (Saturday, about a third of the distance, no mandatory pit stop).'
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [Race, Sprint]
+      - name: season
+        description: Championship year.
+      - name: starts_at
+        description: Start time (UTC).
+      - name: ends_at
+        description: End time (UTC).
+      - name: circuit_short_name
+        description: Short circuit name.
+      - name: country_name
+        description: Host country.
+
+  - name: dim_meetings
+    description: "Grain: one row per race weekend with at least one analysed race."
+    columns:
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+        data_tests: [unique, not_null]
+      - name: meeting_name
+        description: Short name, e.g. "Chinese Grand Prix".
+      - name: meeting_official_name
+        description: Full sponsored name.
+      - name: season
+        description: Championship year.
+      - name: country_name
+        description: Host country.
+      - name: location
+        description: City or area.
+      - name: circuit_short_name
+        description: Short circuit name.
+      - name: circuit_type
+        description: Permanent track or temporary street circuit.
+      - name: starts_at
+        description: Weekend start (UTC).
+      - name: ends_at
+        description: Weekend end (UTC).
+
+  - name: dim_session_drivers
+    description: "Grain: one row per driver per session. Drivers change teams between seasons, so team belongs to the session."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_key, driver_number]
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_sessions')
+                field: session_key
+      - name: driver_number
+        description: "{{ doc('driver_number') }}"
+      - name: full_name
+        description: Driver's name.
+      - name: name_acronym
+        description: Three-letter timing code.
+      - name: team_name
+        description: Team in this session.
+      - name: team_colour_hex
+        description: Team colour for charts.
+
+  - name: fct_laps
+    description: "Grain: one row per lap of one driver in one Race or Sprint. See int_laps_enriched for the clean-lap rule."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_key, driver_number, lap_number]
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_sessions')
+                field: session_key
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+      - name: driver_number
+        description: "{{ doc('driver_number') }}"
+      - name: lap_number
+        description: "{{ doc('lap_number') }}"
+      - name: started_at
+        description: Lap start (UTC).
+      - name: ended_at
+        description: Lap end (UTC).
+      - name: lap_time_s
+        description: Lap time in seconds.
+      - name: sector_1_s
+        description: First-sector time in seconds.
+      - name: sector_2_s
+        description: Second-sector time in seconds.
+      - name: sector_3_s
+        description: Third-sector time in seconds.
+      - name: speed_trap_kph
+        description: Speed-trap speed (km/h).
+      - name: stint_number
+        description: Set of tyres this lap was driven on.
+      - name: compound
+        description: "{{ doc('compound') }}"
+      - name: tyre_age_laps
+        description: "{{ doc('tyre_age_laps') }}"
+      - name: is_pit_in_lap
+        description: Lap ends in the pits.
+      - name: is_pit_out_lap
+        description: Lap starts in the pit lane.
+      - name: neutralisation
+        description: "{{ doc('neutralisation') }}"
+      - name: position_end_of_lap
+        description: "{{ doc('position') }}"
+      - name: is_clean_lap
+        description: Representative of tyre performance (no pits, no safety car, no outlier).
+
+  - name: fct_session_results
+    description: "Grain: one row per driver per Race or Sprint: where they started, where they finished."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_key, driver_number]
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_sessions')
+                field: session_key
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+      - name: driver_number
+        description: "{{ doc('driver_number') }}"
+      - name: grid_position
+        description: Starting position (1 = pole). Empty if the driver started from the pit lane or no grid was published.
+      - name: finish_position
+        description: Classified finishing position; empty if not classified.
+      - name: positions_gained
+        description: Grid position minus finishing position — positive means the driver moved forward.
+      - name: points
+        description: Championship points scored.
+      - name: laps_completed
+        description: Laps completed.
+      - name: did_not_finish
+        description: Retired from the race (DNF).
+      - name: did_not_start
+        description: Did not start (DNS).
+      - name: disqualified
+        description: Disqualified (DSQ).
+      - name: gap_to_leader
+        description: Gap to the winner — seconds or "+N LAP(S)".
+
+unit_tests:
+  - name: test_grids_map_to_their_race
+    model: fct_session_results
+    given:
+      - input: ref('stg_openf1__session_result')
+        rows:
+          - {session_key: 11, meeting_key: 1, driver_number: 4, finish_position: 1}
+          - {session_key: 12, meeting_key: 1, driver_number: 4, finish_position: 3}
+          - {session_key: 21, meeting_key: 2, driver_number: 4, finish_position: 2}
+      - input: ref('stg_openf1__starting_grid')
+        rows:
+          - {qualifying_session_key: 13, meeting_key: 1, driver_number: 4, grid_position: 5}
+          - {qualifying_session_key: 14, meeting_key: 1, driver_number: 4, grid_position: 2}
+          - {qualifying_session_key: 23, meeting_key: 2, driver_number: 4, grid_position: 7}
+      - input: ref('stg_openf1__sessions')
+        rows:
+          - {session_key: 11, meeting_key: 1, session_type: Race, session_name: Race}
+          - {session_key: 12, meeting_key: 1, session_type: Race, session_name: Sprint}
+          - {session_key: 13, meeting_key: 1, session_type: Qualifying, session_name: Qualifying}
+          - {session_key: 14, meeting_key: 1, session_type: Qualifying, session_name: Sprint Qualifying}
+          - {session_key: 21, meeting_key: 2, session_type: Race, session_name: Sprint}
+          - {session_key: 23, meeting_key: 2, session_type: Qualifying, session_name: Sprint Shootout}
+    expect:
+      rows:
+        - {session_key: 11, driver_number: 4, grid_position: 5, finish_position: 1, positions_gained: 4}
+        - {session_key: 12, driver_number: 4, grid_position: 2, finish_position: 3, positions_gained: -1}
+        - {session_key: 21, driver_number: 4, grid_position: 7, finish_position: 2, positions_gained: 5}
