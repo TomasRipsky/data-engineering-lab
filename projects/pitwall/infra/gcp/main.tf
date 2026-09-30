@@ -1,6 +1,6 @@
 locals {
   apis     = ["bigquery.googleapis.com", "storage.googleapis.com", "iam.googleapis.com", "iamcredentials.googleapis.com", "sts.googleapis.com"]
-  datasets = ["raw", "staging", "intermediate", "marts"]
+  datasets = ["raw", "staging", "intermediate", "marts", "audit"]
 }
 
 resource "google_project_service" "apis" {
