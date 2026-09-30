@@ -75,3 +75,9 @@ Lessons learned the hard way, each turned into a rule that prevents it. A lesson
 - **Rule:** before a move, ask which tools resolve configuration by location (ruff, dbt, Terraform, pytest). Keep moves and edits in separate commits so git still detects the rename. Records (specs, plans) are excluded from formatters.
 - **Applied in:** ruff config of every project (`extend-exclude = ["docs/design"]` in `projects/*/pyproject.toml`, so `make lint` and pre-commit agree) and a root `ruff.toml` for `lab/design` — one place per scope, honoured by `make lint`, `ruff` and pre-commit alike; lab ADR 0006.
 - **Follow-up:** the first fix lived only in pre-commit, so `make lint` still failed; the reviewer then found the lab-level exclude had the same flaw. Exclude in the *tool's* config, not in one caller of the tool.
+
+### A condensed guide loses what made the explanation work
+- **Symptom:** the first pitwall guide section was a terse English digest of a much richer chat review; Tomas liked the chat version and asked whether it was being kept.
+- **Cause:** I treated the guide as a summary of the review, while conversations are deleted — the chat was the only copy of the depth.
+- **Rule:** the guide carries the review at full depth (flow, mechanisms, tables, alternatives, failure modes), plus a closing plain-language **In short** for retention.
+- **Applied in:** `agent/tutoring.md` steps 3–4, CLAUDE.md tutoring step 3, `projects/_template/docs/guide.md`.

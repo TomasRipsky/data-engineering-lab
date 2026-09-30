@@ -11,7 +11,9 @@ Work is grouped into **logical blocks** of 2–4 related tasks (e.g. "the stagin
 2. **Execute** without blocking.
 3. **Tutor review after** — my reasoning as an elite engineer (below). No quiz questions: the goal is to transfer judgment, not to test.
    > *Example (Lab 1.0, block 1):* why moves and edits go in separate commits (git detects renames by similarity), why the pre-commit failure was good news (ruff resolves config by location), why the link checker had to be seen failing.
-4. **Vault** — each technology or technique used becomes didactic knowledge in the private Obsidian vault, built on our own cases (standard below).
+   The review **ends with a short plain-language summary** ("En pocas palabras" in chat, **In short** in the guide): 3–5 sentences, no jargon, what Tomas should remember a month later. The technical detail is for understanding; the summary is for retention.
+4. **Guide** — in a project, the review goes into `projects/<p>/docs/guide.md` at the same depth as the chat (flow, mechanisms, alternatives, failure modes, In short), in English. Conversations are deleted; the guide is where the explanation survives.
+5. **Vault** — each technology or technique used becomes didactic knowledge in the private Obsidian vault, built on our own cases (standard below).
 
 ## What an "elite engineer review" covers
 

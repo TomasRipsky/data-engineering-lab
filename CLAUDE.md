@@ -10,7 +10,7 @@ Chat in Spanish. Code, commits, READMEs, ADRs, docs and the vault in English.
 ## Tutoring (every logical block of 2–4 related tasks — full protocol: [agent/tutoring.md](agent/tutoring.md))
 1. **Brief before:** 2–3 sentences — what, with which characteristics, in which tech, why; where we are. Don't wait for OK.
 2. **Execute** without blocking.
-3. **Tutor review after:** my reasoning as an elite engineer — why, how, alternatives, technical characteristics to keep in mind. No interview-style questions.
+3. **Tutor review after:** my reasoning as an elite engineer — why, how, alternatives, technical characteristics to keep in mind. No interview-style questions. Close with a plain-language summary; in a project, write the review into `docs/guide.md` at the same depth.
 4. **Vault:** each technology/technique used → didactic note with concrete cases from our code (how it works inside, why configured so, local vs production, problems hit and why). Enrich before creating.
 
 ## Hard rules
