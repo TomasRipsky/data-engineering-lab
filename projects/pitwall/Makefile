@@ -80,3 +80,4 @@ gh-vars: init ## Publish ENV's project, WIF provider and service account to the 
 	gh variable set PITWALL_PROJECT --env $(ENV) --body "$(PROJECT_ID)"
 	gh variable set PITWALL_WIF_PROVIDER --env $(ENV) --body "$$($(TF) output -raw workload_identity_provider)"
 	gh variable set PITWALL_SERVICE_ACCOUNT --env $(ENV) --body "$$($(TF) output -raw pipeline_service_account)"
+	if [ "$(ENV)" = "prod" ]; then gh variable set PITWALL_DASHBOARD_SERVICE_ACCOUNT --env prod --body "$$($(TF) output -raw dashboard_service_account)"; fi
