@@ -104,3 +104,11 @@ resource "google_service_account_iam_member" "dashboard_wif" {
   role               = "roles/iam.workloadIdentityUser"
   member             = local.github_principal
 }
+
+# CI (dev only) creates and drops its own per-PR datasets; bigquery.user grants datasets.create.
+resource "google_project_iam_member" "pipeline_ci_datasets" {
+  count   = var.env == "dev" ? 1 : 0
+  project = var.project_id
+  role    = "roles/bigquery.user"
+  member  = google_service_account.pipeline.member
+}

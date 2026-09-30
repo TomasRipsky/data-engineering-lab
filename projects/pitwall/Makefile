@@ -1,4 +1,4 @@
-.PHONY: setup test lint fmt ingest load transform bootstrap init plan apply destroy
+.PHONY: setup test lint fmt ingest load transform bootstrap init plan apply destroy gh-vars
 
 ENV ?= dev
 PROJECT_PREFIX ?= pitwall-tr
@@ -64,3 +64,8 @@ apply: init ## Create/update infrastructure for ENV (cost: US$0/month expected)
 
 destroy: init ## Delete every resource Terraform created in ENV (lake data included)
 	$(TF) destroy $(TF_VARS)
+
+gh-vars: init ## Publish ENV's project, WIF provider and service account to the GitHub environment ENV
+	gh variable set PITWALL_PROJECT --env $(ENV) --body "$(PROJECT_ID)"
+	gh variable set PITWALL_WIF_PROVIDER --env $(ENV) --body "$$($(TF) output -raw workload_identity_provider)"
+	gh variable set PITWALL_SERVICE_ACCOUNT --env $(ENV) --body "$$($(TF) output -raw pipeline_service_account)"
