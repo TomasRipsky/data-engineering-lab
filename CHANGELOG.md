@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-30
+
 ### Added
 - Lab site (`site/`, Observable Framework on GitHub Pages): landing page, shared structure and a per-project data export contract (ADR 0005).
 - `pitwall`: public race-strategy section with its own pit-wall look — stint timelines with Safety Car shading, fuel-corrected tyre wear, undercut success — rebuilt by the pipeline from prod through a read-only account (ADR 0007).
