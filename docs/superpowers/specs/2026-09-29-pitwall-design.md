@@ -120,8 +120,8 @@ Rationale: v1 data is megabytes. A full reload is atomic, idempotent, free (load
 dbt project in `transform/`, adapter `dbt-bigquery`, packages: `dbt_utils`. Every model and column has a plain-language `description`; each mart states its grain in its description.
 
 **Layers**
-- **staging** — `stg_openf1__<endpoint>`: one-to-one with raw tables; typing, clean names, dedup on the natural key. No business logic.
-- **intermediate** — `int_laps_enriched`: each lap with compound, tyre age, pit-in/pit-out flags, and SC/VSC flag derived from `race_control`.
+- **staging** — `stg_openf1__<endpoint>`: one-to-one with raw tables; typing, clean names, dedup on the natural key. No business logic. `weather` and `overtakes` stay as sources without staging models until a page needs them; columns OpenF1 never fills (`drivers.country_code`, `race_control.qualifying_phase` in races) are not carried over.
+- **intermediate** — `int_neutralised_laps` (SC/VSC laps from race-control messages; a period without an end message runs to the lap before the next deployment of the same type, or to the session's last lap) and `int_laps_enriched`: each lap with compound, tyre age, pit-in/pit-out flags, SC/VSC flag and running order at the end of the lap.
 - **marts**
 
 | Model | Grain (one row =) | Purpose |
@@ -135,12 +135,14 @@ dbt project in `transform/`, adapter `dbt-bigquery`, packages: `dbt_utils`. Ever
 | `fct_undercut_attempts` | one pit stop that qualifies as an undercut attempt | success flag |
 | `fct_session_results` | one driver in one finished session | grid vs finishing position |
 
-**Degradation slope:** slope of a least-squares fit of lap time on tyre age within a stint, excluding pit-in/pit-out laps and SC/VSC laps; null when fewer than 5 clean laps remain.
+**Degradation slope:** slope of a least-squares fit of lap time on tyre age within a stint, excluding pit-in/pit-out laps and SC/VSC laps; null when fewer than 5 clean laps remain. A clean lap also excludes laps slower than 1.2 × the session median (red flags, damage). Fuel burn makes cars ~0.03–0.06 s/lap faster, so the slope under-states tyre wear; documented, not corrected. Stints with missing or inverted lap ranges are excluded from `fct_stints`.
 
-**Undercut attempt (documented simplification):** driver A pits on lap *n* while in position *p+1* at the end of lap *n−1*, directly behind driver B in position *p*; B pits within laps *n+1 … n+3*. **Success** = A is ahead of B at the end of the first lap on which both have completed their stops. Uses only `position` and `pit`; ignores time gaps (`intervals`) and SC/VSC context — stated as a limitation in the model description and on the dashboard.
+**Pit stops:** sessions with no pit data (some 2023 races) infer stops from consecutive stints (`source = 'stint_change'`).
+
+**Undercut attempt (documented simplification):** driver A pits on lap *n* while in position *p+1* at the end of lap *n−1*, directly behind driver B in position *p*; B pits within laps *n+1 … n+3*. **Success** = A is ahead of B at the end of B's out-lap (B's pit lap + 1), the first lap on which both have completed their stops. Uses only `position` and `pit`; ignores time gaps (`intervals`) and SC/VSC context — stated as a limitation in the model description and on the dashboard.
 
 **Schemas/datasets**
-- dev and prod: datasets `staging`, `intermediate`, `marts` in their own project.
+- dev and prod: datasets `staging`, `intermediate`, `marts` in their own project, plus `audit` for failing test rows (`store_failures`).
 - CI: `ci_pr_<n>_staging`, `ci_pr_<n>_intermediate`, `ci_pr_<n>_marts` in `pitwall-dev`, reading dev's `raw` dataset (so dev must hold at least one ingested season); dropped at the end of the job, and created with a 1-day default table expiration as a safety net if the drop step never runs.
 
 ## 7. Orchestration and CI/CD (GitHub Actions)
@@ -173,11 +175,11 @@ Evidence project in `dashboard/`, reading `pitwall-prod` marts at build time wit
 
 ## 9. Infrastructure, security, cost, teardown
 
-**Bootstrap (manual, once, scripted as `make bootstrap`):** create projects `pitwall-tr-dev` and `pitwall-tr-prod` (project IDs are global; only dev exists before Plan 4), link billing, enable APIs, and create the **billing budget alert (5 in the billing account's currency — EUR here; 50/90/100%) before any Terraform resource**. Project creation stays out of Terraform (needs org/billing-level permissions not worth managing here).
+**Bootstrap (manual, once, scripted as `make bootstrap`):** create projects `pitwall-tr-dev` and `pitwall-tr-prod` inside the organization (`ORG_ID`; project IDs are global; only dev exists before Plan 4), link billing, enable APIs, and create the **billing budget alert (5 in the billing account's currency — EUR here; 50/90/100%) before any Terraform resource**. Project creation stays out of Terraform (needs org/billing-level permissions not worth managing here).
 
 **Terraform** — one root in `infra/gcp/`, variable `env`, `dev.tfvars` / `prod.tfvars`, **local state with one workspace per env** (only Tomas applies; migrate to remote state via ADR if CI ever applies). Per environment:
 - Bucket `pitwall-<env>-raw`, uniform bucket-level access, `force_destroy = true`.
-- BigQuery datasets `raw`, `staging`, `intermediate`, `marts` (`us-central1`), with `delete_contents_on_destroy`.
+- BigQuery datasets `raw`, `staging`, `intermediate`, `marts`, `audit` (`us-central1`), with `delete_contents_on_destroy`.
 - Service accounts: `pipeline` (write bucket, BigQuery data editor + job user) and, in prod only, `dashboard` (data viewer on `marts` + job user).
 - Workload Identity Pool (ID with a random suffix: deleted pools stay reserved 30 days) + GitHub OIDC provider whose `attribute_condition` pins the immutable repository ID of `TomasRipsky/data-engineering-lab` (prod: additionally `environment == "prod"`).
 - **BigQuery custom quota** on query bytes per day (50 GiB, via the `google-beta` provider; default is 200 TiB) — a budget alert only warns; a quota stops spending.
@@ -201,6 +203,7 @@ Evidence project in `dashboard/`, reading `pitwall-prod` marts at build time wit
 - **Extractor (TDD, pytest):** rate limiter, retry policy, path building, schema contract, marker logic — using `httpx.MockTransport` (no extra mocking library). An integration test runs `ingest --meeting` end to end against a temporary `file://` lake with small recorded JSON fixtures from one real GP.
 - **dbt:** generic tests (`unique`, `not_null`, `relationships`, `accepted_values` for compounds and session types); a grain test on every mart (`dbt_utils.unique_combination_of_columns`); **dbt unit tests** for undercut detection and degradation slope with hand-built cases; singular tests (laps within a stint are contiguous; every pit stop falls between two stints).
 - **Sanity checks** (severity `warn`): lap times within a plausible range, excluding pit and SC/VSC laps.
+- **Data quality (dbt source tests):** ingestion rejects only structural breakage; semantic rules live in dbt. `error` for impossible values that would corrupt marts (null/duplicate keys, out-of-range positions/points/grid, non-positive lap times) — blocks the marts and therefore the dashboard; `warn` for unusual-but-real data (null-rate expectations per session, unknown compounds, long pit-lane times, fewer than 18 drivers with laps). Failing rows of every test are stored in the `audit` dataset (`store_failures`). Expected empty fields and known source defects are documented in the README.
 - **Dashboard:** `evidence build` in CI.
 
 ## 11. Phase 2 and out of scope
