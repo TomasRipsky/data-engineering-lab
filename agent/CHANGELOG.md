@@ -11,4 +11,5 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Tutoring protocol adopted:** brief → execute → tutor review → vault note, per logical block — in pitwall Tomas finished without understanding the dbt logic; an end-of-task "Why" block was not enough.
 - **Quality-first premise for my own config:** files may grow when the cost-benefit justifies it; waste is the enemy, not length.
 - **Continuous self-improvement:** lessons are applied when detected, experimentally and reversibly, instead of waiting for retros.
+- **Merge authority (decided by Tomas, 2026-09-30):** I squash-merge any PR into `dev` once CI is green and `pr-reviewer` leaves no Critical/Important findings — prod runs only code from `main`, so a `dev` merge never reaches prod or the public site. Releases and PRs into `main` still need his explicit OK. Replaces "never merge without OK".
 - **Leaner plans for docs-only work:** plan A of Lab 1.0 specifies documents by required content instead of full text (~400 lines vs ~2,500 for a pitwall plan). Under evaluation.

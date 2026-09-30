@@ -65,7 +65,7 @@ git commit -m "feat($NAME): bootstrap project from template"
 git push -u origin HEAD
 gh pr create --base dev --title "feat($NAME): bootstrap project" --body "Closes #$ISSUE"
 ```
-Do not merge — show Tomas the PR link and wait for his OK.
+Merge per `CLAUDE.md` (CI green + `pr-reviewer` for non-trivial changes, then squash-merge into `dev` and verify the issue closed).
 
 ## 6. Next
 The project's design starts with brainstorming; its spec and plans go to `projects/$NAME/docs/design/{specs,plans}/`. `docs/guide.md` is filled during the tutor reviews as the project is built.

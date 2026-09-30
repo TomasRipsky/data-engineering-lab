@@ -16,7 +16,7 @@ Chat in Spanish. Code, commits, READMEs, ADRs, docs and the vault in English.
 ## Hard rules
 - **Design before code** for anything non-trivial: brainstorm → spec → plan → build. Specs/plans go to `lab/design/` (lab) or `projects/<p>/docs/design/` (project) — never `docs/superpowers/`.
 - **Git:** never commit or push to `main` or `dev`. Every change: issue → `<type>/<issue#>-<slug>` from `dev` → PR into `dev` with `Closes #n` → squash merge. Conventional Commits, scope = project, `lab` or `agent`.
-- Before merging a non-trivial PR, run the `pr-reviewer` agent on its branch and fix Critical/Important findings. I may squash-merge into `dev` once CI and review are green; after merging, verify the issue actually closed.
+- Before merging a non-trivial PR, run the `pr-reviewer` agent on its branch and fix Critical/Important findings. I squash-merge any PR into `dev` once CI and review are green (prod runs only `main`); after merging, verify the issue actually closed.
 - **Releases and PRs into `main` only with Tomas's explicit OK.** Procedure: [lab/conventions.md](lab/conventions.md).
 - **Confirm first:** anything destructive, billable or public. **Free tier first**; no always-on compute without a reason. State the expected cost before creating billable resources; budget alert before the first deploy; `make destroy` implemented and tested before anything is left running.
 - **Secrets never enter the repo** (public). Never read or print `.env` files or credentials. Fresh clone → `pre-commit install` before the first commit.
