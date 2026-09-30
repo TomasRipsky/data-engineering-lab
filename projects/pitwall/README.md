@@ -38,7 +38,7 @@ PITWALL_LAKE_URI=.lake make ingest ARGS="--meeting 1255"   # offline: local lake
 
 | Workflow | When | What |
 |---|---|---|
-| `pitwall-ci` | every PR touching pitwall | lint + tests, `terraform validate`, `dbt build` in throwaway `ci_pr_<n>_*` datasets (dropped afterwards, 1-day expiry as a safety net) |
+| `pitwall-ci` | every PR touching pitwall | lint + tests, `terraform validate`, `dbt build` in throwaway per-run datasets `ci_pr_<n>_<run>_*` (dropped afterwards; their tables also expire after 1 day) |
 | `pitwall-pipeline` | Mondays 06:00 UTC (prod) and on demand | ingest → load → transform; prod runs code from `main` only |
 
 GCP access uses Workload Identity Federation: no keys exist. Each GitHub Environment (`dev`, `prod`)

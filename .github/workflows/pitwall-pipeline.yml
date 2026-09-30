@@ -26,6 +26,8 @@ concurrency:
 
 jobs:
   run:
+    # the Monday schedule only runs once prod exists (repo variable PITWALL_SCHEDULE=on)
+    if: github.event_name != 'schedule' || vars.PITWALL_SCHEDULE == 'on'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     environment: ${{ github.event_name == 'schedule' && 'prod' || inputs.env }}
@@ -49,16 +51,16 @@ jobs:
               [[ "$VALUE" =~ ^[0-9]+$ ]] || { echo "::error::value must be a number for mode=$MODE, got '$VALUE'"; exit 1; } ;;
             *) echo "::error::unknown mode '$MODE'"; exit 1 ;;
           esac
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # prod only ever runs released code
           ref: ${{ env.TARGET_ENV == 'prod' && 'main' || github.ref }}
-      - uses: google-github-actions/auth@v3
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
           workload_identity_provider: ${{ vars.PITWALL_WIF_PROVIDER }}
           service_account: ${{ vars.PITWALL_SERVICE_ACCOUNT }}
-      - uses: google-github-actions/setup-gcloud@v3
-      - uses: astral-sh/setup-uv@v10.2.0 # no floating major tag is published since v8
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - run: uv sync --locked
       - name: Ingest
         if: env.MODE != 'none'

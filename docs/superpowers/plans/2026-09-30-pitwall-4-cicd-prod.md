@@ -75,7 +75,7 @@ Expected: `['warn']`.
 
 - [ ] **Step 3: Doc fixes from the review**
 
-- `Makefile` bootstrap help: `ORG_ID=651783965785` → `ORG_ID=XXXXXXXXXXXX` (IDs live in `gcloud organizations list`, not in docs).
+- `Makefile` bootstrap help: `ORG_ID=XXXXXXXXXXXX` → `ORG_ID=XXXXXXXXXXXX` (IDs live in `gcloud organizations list`, not in docs).
 - `README.md` "Cost & teardown": "four BigQuery datasets" → "five BigQuery datasets (raw, staging, intermediate, marts, audit)".
 - `CHANGELOG.md` `## [Unreleased]` → `### Added` (so it ships in v0.3.0): `- \`pitwall\`: CI (lint, tests, terraform validate, dbt in per-PR datasets) and a scheduled/manual pipeline via Workload Identity Federation; production environment backfilled 2023 → 2026.`
 
@@ -425,7 +425,7 @@ Expected: 2023 ≈ 28 sessions (22 races + 6 sprints), 2024 ≈ 30, 2025 = 30, 2
 
 ```bash
 cd projects/pitwall
-make bootstrap ENV=prod BILLING_ACCOUNT=016420-4F3749-E70975 ORG_ID=651783965785
+make bootstrap ENV=prod BILLING_ACCOUNT=XXXXXX-XXXXXX-XXXXXX ORG_ID=XXXXXXXXXXXX
 make plan ENV=prod        # expect 28 to add: dev's 24 + dashboard SA, its marts viewer, job user and WIF binding (no CI role)
 terraform -chdir=infra/gcp apply -auto-approve -var env=prod -var project_id=pitwall-tr-prod
 make gh-vars ENV=prod && gh variable list --env prod
