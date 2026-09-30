@@ -1,12 +1,14 @@
 -- grain: one row per pit stop that is an undercut attempt
 with laps as (
-    select session_key, driver_number, lap_number, position_end_of_lap
+    select session_key, driver_number, lap_number, started_at, ended_at, position_end_of_lap
     from {{ ref('int_laps_enriched') }}
 ),
 
 pits as (
+    -- a stop during a red flag is a free tyre change, not a strategic choice
     select session_key, driver_number, lap_number, is_under_neutralisation
     from {{ ref('fct_pit_stops') }}
+    where coalesce(neutralisation, '') != 'RED'
 ),
 
 attacker_stops as (
@@ -15,7 +17,9 @@ attacker_stops as (
         pits.driver_number as attacker_driver_number,
         pits.lap_number as attacker_pit_lap,
         pits.is_under_neutralisation as attacker_pitted_under_neutralisation,
-        lap_before.position_end_of_lap as attacker_position_before
+        lap_before.position_end_of_lap as attacker_position_before,
+        lap_before.started_at as attacker_lap_started_at,
+        lap_before.ended_at as attacker_lap_ended_at
     from pits
     inner join laps as lap_before
         on lap_before.session_key = pits.session_key
@@ -32,6 +36,18 @@ car_ahead as (
         on ahead.session_key = attacker_stops.session_key
         and ahead.lap_number = attacker_stops.attacker_pit_lap - 1
         and ahead.position_end_of_lap = attacker_stops.attacker_position_before - 1
+        -- same lap on the road: the car ahead crossed the line during the attacker's lap
+        and ahead.ended_at <= attacker_stops.attacker_lap_ended_at
+        and ahead.ended_at > attacker_stops.attacker_lap_started_at
+    where true
+    -- position feeds can lag: if two cars read P-1, the last one across the line is ahead
+    qualify row_number() over (
+        partition by
+            attacker_stops.session_key,
+            attacker_stops.attacker_driver_number,
+            attacker_stops.attacker_pit_lap
+        order by ahead.ended_at desc
+    ) = 1
 ),
 
 attempts as (

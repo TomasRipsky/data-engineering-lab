@@ -5,8 +5,9 @@ models:
     description: >
       Grain: one row per session, lap and neutralisation type. A period starts with
       "(VIRTUAL) SAFETY CAR DEPLOYED" and ends on the lap of "SAFETY CAR IN THIS LAP" or
-      "VIRTUAL SAFETY CAR ENDING". A period with no end message runs until the lap before the
-      next deployment of the same type, or to the session's last lap.
+      "VIRTUAL SAFETY CAR ENDING". A period with no end message stops at the next
+      interruption: a red flag (whose lap still counts) or a new deployment of either type (whose
+      lap does not), otherwise at the session's last lap. A red-flag lap is also listed as RED.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -21,7 +22,7 @@ models:
         data_tests:
           - accepted_values:
               arguments:
-                values: [SC, VSC]
+                values: [SC, VSC, RED]
 
   - name: int_laps_enriched
     description: >
@@ -120,6 +121,32 @@ unit_tests:
         - {session_key: 2, lap_number: 9, neutralisation: SC}
         - {session_key: 2, lap_number: 10, neutralisation: SC}
 
+  - name: test_red_flags_and_vsc_to_sc_close_unended_periods
+    model: int_neutralised_laps
+    given:
+      - input: ref('stg_openf1__race_control')
+        rows:
+          # session 3 (Brazil Sprint 2025): SC, then red flag, then a standing restart (no SC end)
+          - {session_key: 3, recorded_at: "2025-11-08 14:10:00", lap_number: 6, category: SafetyCar, flag: null, message: SAFETY CAR DEPLOYED}
+          - {session_key: 3, recorded_at: "2025-11-08 14:12:00", lap_number: 7, category: Flag, flag: RED, message: RED FLAG}
+          # session 4: a VSC upgraded to a full SC without a "VSC ENDING" message
+          - {session_key: 4, recorded_at: "2025-03-23 07:20:00", lap_number: 10, category: SafetyCar, flag: null, message: VIRTUAL SAFETY CAR DEPLOYED}
+          - {session_key: 4, recorded_at: "2025-03-23 07:22:00", lap_number: 11, category: SafetyCar, flag: null, message: SAFETY CAR DEPLOYED}
+          - {session_key: 4, recorded_at: "2025-03-23 07:26:00", lap_number: 13, category: SafetyCar, flag: null, message: SAFETY CAR IN THIS LAP}
+      - input: ref('stg_openf1__laps')
+        rows:
+          - {session_key: 3, lap_number: 24}
+          - {session_key: 4, lap_number: 30}
+    expect:
+      rows:
+        - {session_key: 3, lap_number: 6, neutralisation: SC}
+        - {session_key: 3, lap_number: 7, neutralisation: SC}
+        - {session_key: 3, lap_number: 7, neutralisation: RED}
+        - {session_key: 4, lap_number: 10, neutralisation: VSC}
+        - {session_key: 4, lap_number: 11, neutralisation: SC}
+        - {session_key: 4, lap_number: 12, neutralisation: SC}
+        - {session_key: 4, lap_number: 13, neutralisation: SC}
+
   - name: test_laps_get_tyres_pits_positions_and_clean_flag
     model: int_laps_enriched
     given:
@@ -130,10 +157,12 @@ unit_tests:
           - {session_key: 1, meeting_key: 9, driver_number: 4, lap_number: 3, started_at: "2025-03-23 07:03:01", lap_time_s: 110.0, is_pit_out_lap: true}
           - {session_key: 1, meeting_key: 9, driver_number: 4, lap_number: 4, started_at: null, lap_time_s: 91.0, is_pit_out_lap: false}
           - {session_key: 1, meeting_key: 9, driver_number: 4, lap_number: 5, started_at: "2025-03-23 07:06:22", lap_time_s: 91.5, is_pit_out_lap: false}
+          # a green, non-pit lap slower than 1.2 × the session median (91.25 s), e.g. damage
+          - {session_key: 1, meeting_key: 9, driver_number: 4, lap_number: 6, started_at: "2025-03-23 07:07:53.500", lap_time_s: 120.0, is_pit_out_lap: false}
       - input: ref('stg_openf1__stints')
         rows:
           - {session_key: 1, driver_number: 4, stint_number: 1, first_lap: 1, last_lap: 2, compound: MEDIUM, tyre_age_at_start: 3}
-          - {session_key: 1, driver_number: 4, stint_number: 2, first_lap: 3, last_lap: 5, compound: HARD, tyre_age_at_start: 0}
+          - {session_key: 1, driver_number: 4, stint_number: 2, first_lap: 3, last_lap: 6, compound: HARD, tyre_age_at_start: 0}
       - input: ref('stg_openf1__pit')
         rows:
           - {session_key: 1, driver_number: 4, lap_number: 2}
@@ -152,3 +181,4 @@ unit_tests:
         - {lap_number: 3, compound: HARD, tyre_age_laps: 0, is_pit_in_lap: false, position_end_of_lap: 4, neutralisation: null, is_clean_lap: false}
         - {lap_number: 4, compound: HARD, tyre_age_laps: 1, is_pit_in_lap: false, position_end_of_lap: 4, neutralisation: null, is_clean_lap: true}
         - {lap_number: 5, compound: HARD, tyre_age_laps: 2, is_pit_in_lap: false, position_end_of_lap: 4, neutralisation: VSC, is_clean_lap: false}
+        - {lap_number: 6, compound: HARD, tyre_age_laps: 3, is_pit_in_lap: false, position_end_of_lap: 4, neutralisation: null, is_clean_lap: false}

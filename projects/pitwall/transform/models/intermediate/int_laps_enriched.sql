@@ -17,11 +17,15 @@ positions as (
 ),
 
 neutralised as (
-    -- a lap can see a VSC turn into an SC: the SC wins
+    -- a lap can see several: a red flag outranks the SC, which outranks the VSC
     select
         session_key,
         lap_number,
-        if(countif(neutralisation = 'SC') > 0, 'SC', 'VSC') as neutralisation
+        case
+            when countif(neutralisation = 'RED') > 0 then 'RED'
+            when countif(neutralisation = 'SC') > 0 then 'SC'
+            else 'VSC'
+        end as neutralisation
     from {{ ref('int_neutralised_laps') }}
     group by session_key, lap_number
 ),

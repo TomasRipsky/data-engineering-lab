@@ -27,7 +27,7 @@ Running order: 1 is the leader. Taken from the latest position update recorded b
 {% enddocs %}
 
 {% docs neutralisation %}
-`SC` if the Safety Car was on track during this lap, `VSC` for the Virtual Safety Car, empty otherwise. Everyone drives slowly under either, so these laps say nothing about tyre wear, and pit stops cost less time.
+`SC` if the Safety Car was on track during this lap, `VSC` for the Virtual Safety Car, `RED` if the race was stopped with a red flag on this lap, empty otherwise. Everyone drives slowly under either, so these laps say nothing about tyre wear, and pit stops cost less time.
 {% enddocs %}
 
 {% docs ingested_at %}

@@ -244,7 +244,9 @@ models:
       - name: position_after
         description: Running order at the end of the lap after the stop (the out-lap).
       - name: is_under_neutralisation
-        description: True if the driver pitted under the Safety Car or VSC, when a stop costs less time.
+        description: True if the driver pitted under the Safety Car, VSC or a red flag, when a stop costs less time.
+      - name: neutralisation
+        description: "Neutralisation on the in-lap: {{ doc('neutralisation') }}"
 
   - name: fct_undercut_attempts
     description: >
@@ -252,8 +254,10 @@ models:
       car directly ahead, use the grip of new tyres to go faster, and be in front once they pit
       too. Definition: driver A pits on lap n while running directly behind driver B at the end
       of lap n−1; B pits on lap n+1, n+2 or n+3. **Success** means A is ahead of B at the end of
-      B's out-lap (B's pit lap + 1), the first lap both have completed their stops. Limitations:
-      time gaps are ignored, and stops under a Safety Car (flagged) are not a real undercut.
+      B's out-lap (B's pit lap + 1), the first lap both have completed their stops. The car ahead must have crossed the line on the same lap just
+      before the attacker (so a car a lap ahead never counts), and stops during a red flag (free
+      tyre changes) are excluded. Limitations: time gaps are ignored, and stops under a Safety Car
+      (flagged) are not a real undercut.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -361,33 +365,72 @@ unit_tests:
     given:
       - input: ref('fct_pit_stops')
         rows:
-          # session 1: A=4 pits lap 20 behind B=81; B answers lap 22; A ahead after → success
-          - {session_key: 1, driver_number: 4, lap_number: 20, is_under_neutralisation: false}
-          - {session_key: 1, driver_number: 81, lap_number: 22, is_under_neutralisation: false}
-          # session 2: same, but B stays ahead → failure
-          - {session_key: 2, driver_number: 4, lap_number: 20, is_under_neutralisation: false}
-          - {session_key: 2, driver_number: 81, lap_number: 22, is_under_neutralisation: false}
-          # session 3: B answers too late (lap 25) → not an attempt
-          - {session_key: 3, driver_number: 4, lap_number: 20, is_under_neutralisation: false}
-          - {session_key: 3, driver_number: 81, lap_number: 25, is_under_neutralisation: false}
-          # session 4: A was 2 places behind B → not an attempt
-          - {session_key: 4, driver_number: 4, lap_number: 20, is_under_neutralisation: false}
-          - {session_key: 4, driver_number: 81, lap_number: 21, is_under_neutralisation: false}
+          # 1: A=4 pits lap 20 right behind B=81; B answers lap 22; A ahead after → success
+          - {session_key: 1, driver_number: 4, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 1, driver_number: 81, lap_number: 22, is_under_neutralisation: false, neutralisation: null}
+          # 2: same, but B stays ahead → failure
+          - {session_key: 2, driver_number: 4, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 2, driver_number: 81, lap_number: 22, is_under_neutralisation: false, neutralisation: null}
+          # 3: B answers too late (n+5) → not an attempt
+          - {session_key: 3, driver_number: 4, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 3, driver_number: 81, lap_number: 25, is_under_neutralisation: false, neutralisation: null}
+          # 4: A was two places behind B → not an attempt
+          - {session_key: 4, driver_number: 4, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 4, driver_number: 81, lap_number: 21, is_under_neutralisation: false, neutralisation: null}
+          # 5: B pits on the same lap (n) → not a response, not an attempt
+          - {session_key: 5, driver_number: 4, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 5, driver_number: 81, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          # 6: B answers on the last lap of the window (n+3) → attempt, success
+          - {session_key: 6, driver_number: 4, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 6, driver_number: 81, lap_number: 23, is_under_neutralisation: false, neutralisation: null}
+          # 7: B answers just outside the window (n+4) → not an attempt
+          - {session_key: 7, driver_number: 4, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 7, driver_number: 81, lap_number: 24, is_under_neutralisation: false, neutralisation: null}
+          # 8: two cars both read P1 at their own line crossing; the one that crossed last before A is the car ahead
+          - {session_key: 8, driver_number: 4, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 8, driver_number: 81, lap_number: 21, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 8, driver_number: 16, lap_number: 21, is_under_neutralisation: false, neutralisation: null}
+          # 9: A pitted during a red flag → free tyre change, not an undercut
+          - {session_key: 9, driver_number: 4, lap_number: 20, is_under_neutralisation: true, neutralisation: RED}
+          - {session_key: 9, driver_number: 81, lap_number: 21, is_under_neutralisation: false, neutralisation: null}
+          # 10: the car one place ahead is a lap ahead on the road (crossed before A even started the lap)
+          - {session_key: 10, driver_number: 4, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 10, driver_number: 44, lap_number: 21, is_under_neutralisation: false, neutralisation: null}
       - input: ref('int_laps_enriched')
         rows:
-          - {session_key: 1, driver_number: 81, lap_number: 19, position_end_of_lap: 1}
-          - {session_key: 1, driver_number: 4, lap_number: 19, position_end_of_lap: 2}
+          - {session_key: 1, driver_number: 81, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:28", position_end_of_lap: 1}
+          - {session_key: 1, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 2}
           - {session_key: 1, driver_number: 4, lap_number: 23, position_end_of_lap: 1}
           - {session_key: 1, driver_number: 81, lap_number: 23, position_end_of_lap: 2}
-          - {session_key: 2, driver_number: 81, lap_number: 19, position_end_of_lap: 1}
-          - {session_key: 2, driver_number: 4, lap_number: 19, position_end_of_lap: 2}
+          - {session_key: 2, driver_number: 81, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:28", position_end_of_lap: 1}
+          - {session_key: 2, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 2}
           - {session_key: 2, driver_number: 81, lap_number: 23, position_end_of_lap: 1}
           - {session_key: 2, driver_number: 4, lap_number: 23, position_end_of_lap: 2}
-          - {session_key: 3, driver_number: 81, lap_number: 19, position_end_of_lap: 1}
-          - {session_key: 3, driver_number: 4, lap_number: 19, position_end_of_lap: 2}
-          - {session_key: 4, driver_number: 81, lap_number: 19, position_end_of_lap: 1}
-          - {session_key: 4, driver_number: 4, lap_number: 19, position_end_of_lap: 3}
+          - {session_key: 3, driver_number: 81, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:28", position_end_of_lap: 1}
+          - {session_key: 3, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 2}
+          - {session_key: 4, driver_number: 81, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:26", position_end_of_lap: 1}
+          - {session_key: 4, driver_number: 16, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:28", position_end_of_lap: 2}
+          - {session_key: 4, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 3}
+          - {session_key: 5, driver_number: 81, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:28", position_end_of_lap: 1}
+          - {session_key: 5, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 2}
+          - {session_key: 6, driver_number: 81, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:28", position_end_of_lap: 1}
+          - {session_key: 6, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 2}
+          - {session_key: 6, driver_number: 4, lap_number: 24, position_end_of_lap: 1}
+          - {session_key: 6, driver_number: 81, lap_number: 24, position_end_of_lap: 2}
+          - {session_key: 7, driver_number: 81, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:28", position_end_of_lap: 1}
+          - {session_key: 7, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 2}
+          - {session_key: 8, driver_number: 81, lap_number: 19, started_at: "2025-03-23 06:59:50", ended_at: "2025-03-23 07:01:20", position_end_of_lap: 1}
+          - {session_key: 8, driver_number: 16, lap_number: 19, started_at: "2025-03-23 06:59:55", ended_at: "2025-03-23 07:01:25", position_end_of_lap: 1}
+          - {session_key: 8, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 2}
+          - {session_key: 8, driver_number: 4, lap_number: 22, position_end_of_lap: 1}
+          - {session_key: 8, driver_number: 16, lap_number: 22, position_end_of_lap: 2}
+          - {session_key: 9, driver_number: 81, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:28", position_end_of_lap: 1}
+          - {session_key: 9, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 2}
+          - {session_key: 10, driver_number: 44, lap_number: 19, started_at: "2025-03-23 06:56:30", ended_at: "2025-03-23 06:58:00", position_end_of_lap: 4}
+          - {session_key: 10, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 5}
     expect:
       rows:
         - {session_key: 1, attacker_driver_number: 4, defender_driver_number: 81, defender_pit_lap: 22, comparison_lap: 23, is_success: true}
         - {session_key: 2, attacker_driver_number: 4, defender_driver_number: 81, defender_pit_lap: 22, comparison_lap: 23, is_success: false}
+        - {session_key: 6, attacker_driver_number: 4, defender_driver_number: 81, defender_pit_lap: 23, comparison_lap: 24, is_success: true}
+        - {session_key: 8, attacker_driver_number: 4, defender_driver_number: 16, defender_pit_lap: 21, comparison_lap: 22, is_success: true}

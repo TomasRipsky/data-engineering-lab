@@ -55,7 +55,8 @@ select
     after_stop.compound as compound_after,
     lap_before.position_end_of_lap as position_before,
     lap_after.position_end_of_lap as position_after,
-    in_lap.neutralisation is not null as is_under_neutralisation
+    in_lap.neutralisation is not null as is_under_neutralisation,
+    in_lap.neutralisation
 from stops
 left join stints as before_stop
     on before_stop.session_key = stops.session_key
