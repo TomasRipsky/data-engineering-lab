@@ -8,6 +8,7 @@ Each project is self-contained under [`projects/`](projects/) with its own READM
 
 | Project | What it does | Stack | Status |
 |---|---|---|---|
+| [pitwall](projects/pitwall/) | Batch ELT over Formula 1 data (OpenF1 → GCS → BigQuery → dbt → Evidence) that explains race strategy — tyres, pit stops and the undercut — to people who don't follow F1. | TBD | 🌱 bootstrapped |
 
 ## Getting started
 

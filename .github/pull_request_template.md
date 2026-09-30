@@ -15,4 +15,5 @@ Closes #
 - [ ] Branch follows `<type>/<issue#>-<slug>`
 - [ ] Commits follow Conventional Commits with project scope
 - [ ] Docs / ADRs updated where decisions were made
+- [ ] Second-brain notes updated for new concepts (or n/a)
 - [ ] No secrets, no billable resources left running

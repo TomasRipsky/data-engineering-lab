@@ -1,0 +1,18 @@
+# Copied to profiles.yml by `make transform`. OAuth = your gcloud ADC locally, WIF in CI.
+pitwall:
+  target: dev
+  outputs:
+    dev: &bigquery
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('PITWALL_BQ_PROJECT') }}"
+      dataset: staging
+      location: us-central1
+      threads: 4
+      job_execution_timeout_seconds: 300
+      maximum_bytes_billed: 1000000000 # 1 GB per query: a second cost guard next to the quota
+    prod:
+      <<: *bigquery
+    ci:
+      <<: *bigquery
+      dataset: "{{ env_var('DBT_CI_SCHEMA', 'ci_local') }}"

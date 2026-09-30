@@ -1,0 +1,245 @@
+version: 2
+
+models:
+  - name: stg_openf1__meetings
+    description: "Grain: one row per race weekend. Cleaned copy of the OpenF1 meetings table."
+    columns:
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+        data_tests: [unique, not_null]
+      - name: meeting_name
+        description: Short name, e.g. "Chinese Grand Prix".
+      - name: meeting_official_name
+        description: Full sponsored name of the event.
+      - name: season
+        description: Championship year.
+      - name: location
+        description: City or area of the circuit.
+      - name: country_name
+        description: Country hosting the race.
+      - name: circuit_short_name
+        description: Short circuit name, e.g. "Shanghai".
+      - name: circuit_type
+        description: '"Permanent" race track or "Temporary" street circuit.'
+      - name: starts_at
+        description: Start of the weekend's first session (UTC).
+      - name: ends_at
+        description: End of the weekend's last session (UTC).
+
+  - name: stg_openf1__sessions
+    description: "Grain: one row per session of an ingested season (all session types)."
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+        data_tests: [unique, not_null]
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+        data_tests: [not_null]
+      - name: session_type
+        description: '"Practice", "Qualifying" or "Race" (a Sprint counts as a race).'
+      - name: session_name
+        description: '"Race", "Sprint", "Qualifying", "Sprint Qualifying" ("Sprint Shootout" in 2023), "Practice 1", ...'
+      - name: season
+        description: Championship year.
+      - name: starts_at
+        description: Scheduled start (UTC).
+      - name: ends_at
+        description: Scheduled end (UTC).
+      - name: is_cancelled
+        description: True when the session did not take place.
+      - name: circuit_short_name
+        description: Short circuit name.
+      - name: country_name
+        description: Host country.
+
+  - name: stg_openf1__drivers
+    description: "Grain: one row per driver per session."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_key, driver_number]
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+      - name: driver_number
+        description: "{{ doc('driver_number') }}"
+        data_tests: [not_null]
+      - name: full_name
+        description: Driver's name as broadcast, e.g. "Oscar PIASTRI".
+      - name: name_acronym
+        description: Three-letter code shown on TV timing, e.g. "PIA".
+      - name: team_name
+        description: Team the driver raced for in this session.
+      - name: team_colour_hex
+        description: Team colour as a hex code (used by the dashboard), e.g. "#FF8000".
+
+  - name: stg_openf1__laps
+    description: "Grain: one row per lap of one driver in one session."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_key, driver_number, lap_number]
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+        data_tests: [not_null]
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+      - name: driver_number
+        description: "{{ doc('driver_number') }}"
+        data_tests: [not_null]
+      - name: lap_number
+        description: "{{ doc('lap_number') }}"
+        data_tests: [not_null]
+      - name: started_at
+        description: When the lap started (UTC). Missing for a few laps.
+      - name: lap_time_s
+        description: Lap time in seconds. Missing when timing failed (often lap 1 or laps ending in the pits).
+      - name: sector_1_s
+        description: Time through the first third of the lap, in seconds.
+      - name: sector_2_s
+        description: Time through the second third of the lap, in seconds.
+      - name: sector_3_s
+        description: Time through the last third of the lap, in seconds.
+      - name: speed_trap_kph
+        description: Speed at the fastest point of the track (km/h).
+      - name: is_pit_out_lap
+        description: True for the lap that starts in the pit lane after a stop (slow, not representative).
+
+  - name: stg_openf1__stints
+    description: "Grain: one row per stint — the laps one driver completes on one set of tyres."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_key, driver_number, stint_number]
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+      - name: driver_number
+        description: "{{ doc('driver_number') }}"
+      - name: stint_number
+        description: 1 for the tyres the driver started on, 2 after the first stop, and so on.
+      - name: first_lap
+        description: First lap driven on this set of tyres.
+      - name: last_lap
+        description: Last lap driven on this set of tyres (usually the lap of the next pit stop).
+      - name: compound
+        description: "{{ doc('compound') }}"
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [SOFT, MEDIUM, HARD, INTERMEDIATE, WET, UNKNOWN]
+      - name: tyre_age_at_start
+        description: Laps these tyres had already done before the stint began.
+      - name: has_valid_lap_range
+        description: False when OpenF1 sent a missing or inverted lap range; such stints are kept here but left out of the marts.
+
+  - name: stg_openf1__pit
+    description: "Grain: one row per pit-lane visit."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_key, driver_number, lap_number]
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+      - name: driver_number
+        description: "{{ doc('driver_number') }}"
+      - name: lap_number
+        description: Lap on which the driver entered the pit lane (the "in-lap").
+      - name: pitted_at
+        description: When the car entered the pit lane (UTC).
+      - name: pit_lane_time_s
+        description: Seconds from pit entry to pit exit (~20 s is typical).
+      - name: stationary_time_s
+        description: Seconds the car stood still while tyres were changed (~2–3 s). Missing before 2025.
+
+  - name: stg_openf1__position
+    description: "Grain: one row per change in running order for one driver."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_key, driver_number, recorded_at]
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+      - name: driver_number
+        description: "{{ doc('driver_number') }}"
+      - name: recorded_at
+        description: When the new position took effect (UTC).
+      - name: position
+        description: "{{ doc('position') }}"
+
+  - name: stg_openf1__race_control
+    description: "Grain: one row per race-control message (flags, safety car, incidents)."
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+      - name: recorded_at
+        description: When the message was issued (UTC).
+      - name: lap_number
+        description: Race leader's lap when the message was issued.
+      - name: driver_number
+        description: Driver the message is about, if any.
+      - name: category
+        description: '"Flag", "SafetyCar", "Other", ...'
+      - name: flag
+        description: Flag shown, e.g. GREEN, YELLOW, RED, CHEQUERED.
+      - name: message
+        description: Message text, e.g. "SAFETY CAR DEPLOYED".
+
+  - name: stg_openf1__session_result
+    description: "Grain: one row per driver per finished session."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_key, driver_number]
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+      - name: driver_number
+        description: "{{ doc('driver_number') }}"
+      - name: finish_position
+        description: Classified finishing position; empty for drivers who were not classified.
+      - name: laps_completed
+        description: Laps the driver completed.
+      - name: points
+        description: Championship points scored.
+      - name: did_not_finish
+        description: True if the driver retired (DNF).
+      - name: did_not_start
+        description: True if the driver did not take the start (DNS).
+      - name: disqualified
+        description: True if the driver was disqualified (DSQ).
+      - name: gap_to_leader
+        description: Gap to the winner as text — seconds ("11.097") or laps ("+1 LAP").
+
+  - name: stg_openf1__starting_grid
+    description: "Grain: one row per driver per starting grid. OpenF1 attaches a grid to the qualifying session that produced it."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [qualifying_session_key, driver_number]
+    columns:
+      - name: qualifying_session_key
+        description: The qualifying session that set this grid ("Qualifying" → Race, "Sprint Qualifying"/"Sprint Shootout" → Sprint).
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+      - name: driver_number
+        description: "{{ doc('driver_number') }}"
+      - name: grid_position
+        description: Starting position (1 = pole position).
+      - name: qualifying_lap_time_s
+        description: The qualifying lap time that earned the grid slot, in seconds.

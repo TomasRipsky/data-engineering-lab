@@ -1,0 +1,198 @@
+version: 2
+
+sources:
+  - name: openf1
+    description: Raw OpenF1 data, rebuilt from the GCS lake by `pitwall load`. One table per API endpoint, Race and Sprint sessions only.
+    database: "{{ env_var('PITWALL_BQ_PROJECT') }}"
+    schema: raw
+    tables:
+      - name: openf1_meetings
+        description: One row per race weekend (and testing) of each ingested season.
+        columns:
+          - name: meeting_key
+            data_tests:
+              - not_null
+              - unique:
+                  config:
+                    severity: warn
+
+      - name: openf1_sessions
+        description: One row per session (practice, qualifying, sprint, race) of each ingested season.
+        columns:
+          - name: session_key
+            data_tests:
+              - not_null
+              - unique:
+                  config:
+                    severity: warn
+          - name: session_type
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: [Practice, Qualifying, Race]
+                  config:
+                    severity: warn
+
+      - name: openf1_drivers
+        description: Drivers taking part in each session, with their team. `country_code` is never filled by OpenF1 and is not modelled.
+        data_tests:
+          - dbt_utils.unique_combination_of_columns:
+              arguments:
+                combination_of_columns: [session_key, driver_number]
+              config:
+                severity: warn
+        columns:
+          - name: driver_number
+            data_tests:
+              - not_null
+              - dbt_utils.accepted_range:
+                  arguments:
+                    min_value: 1
+                    max_value: 99
+          - name: team_name
+            data_tests:
+              - not_null:
+                  config:
+                    severity: warn
+
+      - name: openf1_laps
+        description: One row per lap per driver, with lap and sector times.
+        data_tests:
+          - dbt_utils.unique_combination_of_columns:
+              arguments:
+                combination_of_columns: [session_key, driver_number, lap_number]
+              config:
+                severity: warn
+        columns:
+          - name: lap_number
+            data_tests:
+              - not_null
+              - dbt_utils.accepted_range:
+                  arguments:
+                    min_value: 1
+                    max_value: 100
+          - name: lap_duration
+            data_tests:
+              - dbt_utils.accepted_range:
+                  arguments:
+                    min_value: 30
+                    inclusive: true
+              # timing gaps happen (lap 1, pit laps); more than 2% missing in a race is suspicious
+              - dbt_utils.not_null_proportion:
+                  arguments:
+                    at_least: 0.98
+                    group_by_columns: [session_key]
+                  config:
+                    severity: warn
+          - name: date_start
+            data_tests:
+              - dbt_utils.not_null_proportion:
+                  arguments:
+                    at_least: 0.98
+                    group_by_columns: [session_key]
+                  config:
+                    severity: warn
+
+      - name: openf1_stints
+        description: Tyre stints — continuous runs on one set of tyres.
+        data_tests:
+          - dbt_utils.unique_combination_of_columns:
+              arguments:
+                combination_of_columns: [session_key, driver_number, stint_number]
+              config:
+                severity: warn
+        columns:
+          - name: compound
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: [SOFT, MEDIUM, HARD, INTERMEDIATE, WET]
+                  config:
+                    severity: warn
+          - name: tyre_age_at_start
+            data_tests:
+              - dbt_utils.accepted_range:
+                  arguments:
+                    min_value: 0
+                    max_value: 100
+
+      - name: openf1_pit
+        description: Pit-lane visits, with time spent in the lane and stationary. `stop_duration` is missing for some stops.
+        data_tests:
+          - dbt_utils.unique_combination_of_columns:
+              arguments:
+                combination_of_columns: [session_key, driver_number, lap_number]
+              config:
+                severity: warn
+        columns:
+          - name: lane_duration
+            data_tests:
+              # a normal stop is 18–30 s; drive-throughs and red-flag stops are longer
+              - dbt_utils.accepted_range:
+                  arguments:
+                    min_value: 10
+                    max_value: 120
+                  config:
+                    severity: warn
+
+      - name: openf1_position
+        description: Every change in running order, with its timestamp.
+        columns:
+          - name: position
+            data_tests:
+              - not_null
+              - dbt_utils.accepted_range:
+                  arguments:
+                    min_value: 1
+                    max_value: 30
+
+      - name: openf1_weather
+        description: Weather at the track about once a minute (not modelled in v1).
+        columns:
+          - name: session_key
+            data_tests: [not_null]
+
+      - name: openf1_race_control
+        description: >
+          Messages from race control. Many fields are empty by design: `driver_number` only when a
+          message concerns one car, `flag`/`scope`/`sector` only for flag messages,
+          `qualifying_phase` only in qualifying (never in races).
+        columns:
+          - name: session_key
+            data_tests: [not_null]
+          - name: date
+            data_tests: [not_null]
+
+      - name: openf1_session_result
+        description: Final classification. Position, gap and duration are empty for unclassified drivers (DNF, DNS, DSQ).
+        columns:
+          - name: position
+            data_tests:
+              - dbt_utils.accepted_range:
+                  arguments:
+                    min_value: 1
+                    max_value: 30
+          - name: points
+            data_tests:
+              - not_null
+              - dbt_utils.accepted_range:
+                  arguments:
+                    min_value: 0
+                    max_value: 30
+
+      - name: openf1_overtakes
+        description: Position swaps between two drivers (not modelled in v1).
+        columns:
+          - name: session_key
+            data_tests: [not_null]
+
+      - name: openf1_starting_grid
+        description: Starting grid, attached by OpenF1 to the qualifying session that produced it.
+        columns:
+          - name: position
+            data_tests:
+              - not_null
+              - dbt_utils.accepted_range:
+                  arguments:
+                    min_value: 1
+                    max_value: 30

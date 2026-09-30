@@ -1,0 +1,436 @@
+version: 2
+
+models:
+  - name: dim_sessions
+    description: "Grain: one row per Race or Sprint session that has lap data. The races pitwall analyses."
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+        data_tests: [unique, not_null]
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_meetings')
+                field: meeting_key
+      - name: session_name
+        description: '"Race" (Sunday, full distance) or "Sprint" (Saturday, about a third of the distance, no mandatory pit stop).'
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [Race, Sprint]
+      - name: season
+        description: Championship year.
+      - name: starts_at
+        description: Start time (UTC).
+      - name: ends_at
+        description: End time (UTC).
+      - name: circuit_short_name
+        description: Short circuit name.
+      - name: country_name
+        description: Host country.
+
+  - name: dim_meetings
+    description: "Grain: one row per race weekend with at least one analysed race."
+    columns:
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+        data_tests: [unique, not_null]
+      - name: meeting_name
+        description: Short name, e.g. "Chinese Grand Prix".
+      - name: meeting_official_name
+        description: Full sponsored name.
+      - name: season
+        description: Championship year.
+      - name: country_name
+        description: Host country.
+      - name: location
+        description: City or area.
+      - name: circuit_short_name
+        description: Short circuit name.
+      - name: circuit_type
+        description: Permanent track or temporary street circuit.
+      - name: starts_at
+        description: Weekend start (UTC).
+      - name: ends_at
+        description: Weekend end (UTC).
+
+  - name: dim_session_drivers
+    description: "Grain: one row per driver per session. Drivers change teams between seasons, so team belongs to the session."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_key, driver_number]
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_sessions')
+                field: session_key
+      - name: driver_number
+        description: "{{ doc('driver_number') }}"
+      - name: full_name
+        description: Driver's name.
+      - name: name_acronym
+        description: Three-letter timing code.
+      - name: team_name
+        description: Team in this session.
+      - name: team_colour_hex
+        description: Team colour for charts.
+
+  - name: fct_laps
+    description: "Grain: one row per lap of one driver in one Race or Sprint. See int_laps_enriched for the clean-lap rule."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_key, driver_number, lap_number]
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_sessions')
+                field: session_key
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+      - name: driver_number
+        description: "{{ doc('driver_number') }}"
+      - name: lap_number
+        description: "{{ doc('lap_number') }}"
+      - name: started_at
+        description: Lap start (UTC).
+      - name: ended_at
+        description: Lap end (UTC).
+      - name: lap_time_s
+        description: Lap time in seconds.
+      - name: sector_1_s
+        description: First-sector time in seconds.
+      - name: sector_2_s
+        description: Second-sector time in seconds.
+      - name: sector_3_s
+        description: Third-sector time in seconds.
+      - name: speed_trap_kph
+        description: Speed-trap speed (km/h).
+      - name: stint_number
+        description: Set of tyres this lap was driven on.
+      - name: compound
+        description: "{{ doc('compound') }}"
+      - name: tyre_age_laps
+        description: "{{ doc('tyre_age_laps') }}"
+      - name: is_pit_in_lap
+        description: Lap ends in the pits.
+      - name: is_pit_out_lap
+        description: Lap starts in the pit lane.
+      - name: neutralisation
+        description: "{{ doc('neutralisation') }}"
+      - name: position_end_of_lap
+        description: "{{ doc('position') }}"
+      - name: is_clean_lap
+        description: Representative of tyre performance (no pits, no safety car, no outlier).
+
+  - name: fct_session_results
+    description: "Grain: one row per driver per Race or Sprint: where they started, where they finished."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_key, driver_number]
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_sessions')
+                field: session_key
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+      - name: driver_number
+        description: "{{ doc('driver_number') }}"
+      - name: grid_position
+        description: Starting position (1 = pole). Empty if the driver started from the pit lane or no grid was published.
+      - name: finish_position
+        description: Classified finishing position; empty if not classified.
+      - name: positions_gained
+        description: Grid position minus finishing position — positive means the driver moved forward.
+      - name: points
+        description: Championship points scored.
+      - name: laps_completed
+        description: Laps completed.
+      - name: did_not_finish
+        description: Retired from the race (DNF).
+      - name: did_not_start
+        description: Did not start (DNS).
+      - name: disqualified
+        description: Disqualified (DSQ).
+      - name: gap_to_leader
+        description: Gap to the winner — seconds or "+N LAP(S)".
+
+  - name: fct_stints
+    description: >
+      Grain: one row per stint — one driver on one set of tyres in one race. **Degradation** is how
+      many seconds slower each extra lap on these tyres gets: the slope of a straight line fitted
+      through clean lap times against tyre age. It needs at least 5 clean laps; otherwise it is
+      empty. Limitation: cars also get lighter as fuel burns (about 0.03–0.06 s per lap faster),
+      which hides part of the tyre wear, so real degradation is a little higher than shown.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_key, driver_number, stint_number]
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+      - name: driver_number
+        description: "{{ doc('driver_number') }}"
+      - name: stint_number
+        description: 1 for the starting tyres, 2 after the first stop, and so on.
+      - name: compound
+        description: "{{ doc('compound') }}"
+      - name: first_lap
+        description: First lap on these tyres.
+      - name: last_lap
+        description: Last lap on these tyres.
+      - name: laps_in_stint
+        description: Number of laps driven on these tyres.
+      - name: tyre_age_at_start
+        description: Laps the tyres had already done when the stint began.
+      - name: clean_laps
+        description: Laps in the stint that count for degradation (see int_laps_enriched).
+      - name: mean_clean_lap_time_s
+        description: Average clean lap time in seconds.
+      - name: degradation_s_per_lap
+        description: Seconds lost per extra lap of tyre age. Empty with fewer than 5 clean laps.
+
+  - name: fct_pit_stops
+    description: >
+      Grain: one row per pit stop. When a race has no pit data at all (some 2023 races), stops are
+      inferred from tyre changes: the last lap of each stint that is followed by another stint.
+      Those rows have source "stint_change" and no durations.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_key, driver_number, lap_number]
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+      - name: meeting_key
+        description: "{{ doc('meeting_key') }}"
+      - name: driver_number
+        description: "{{ doc('driver_number') }}"
+      - name: lap_number
+        description: Lap on which the driver came into the pits (the in-lap).
+      - name: pit_lane_time_s
+        description: Seconds from pit entry to pit exit.
+      - name: stationary_time_s
+        description: Seconds the car stood still (2025 onwards).
+      - name: source
+        description: '"pit" when OpenF1 recorded the stop, "stint_change" when inferred from a tyre change.'
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [pit, stint_change]
+      - name: compound_before
+        description: Tyres the driver came in on.
+      - name: compound_after
+        description: Tyres the driver left on. Empty for stops without a tyre change (e.g. a penalty).
+      - name: position_before
+        description: Running order at the end of the lap before the stop.
+      - name: position_after
+        description: Running order at the end of the lap after the stop (the out-lap).
+      - name: is_under_neutralisation
+        description: True if the driver pitted under the Safety Car, VSC or a red flag, when a stop costs less time.
+      - name: neutralisation
+        description: "Neutralisation on the in-lap: {{ doc('neutralisation') }}"
+
+  - name: fct_undercut_attempts
+    description: >
+      Grain: one row per pit stop that is an undercut attempt. The **undercut**: pit before the
+      car directly ahead, use the grip of new tyres to go faster, and be in front once they pit
+      too. Definition: driver A pits on lap n while running directly behind driver B at the end
+      of lap n−1; B pits on lap n+1, n+2 or n+3. **Success** means A is ahead of B at the end of
+      B's out-lap (B's pit lap + 1), the first lap both have completed their stops. The car ahead must have crossed the line on the same lap just
+      before the attacker (so a car a lap ahead never counts), and stops during a red flag (free
+      tyre changes) are excluded. Limitations: time gaps are ignored, and stops under a Safety Car
+      (flagged) are not a real undercut.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_key, attacker_driver_number, attacker_pit_lap]
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+      - name: attacker_driver_number
+        description: Driver who pitted first, trying the undercut.
+      - name: defender_driver_number
+        description: Driver directly ahead who responded by pitting within 3 laps.
+      - name: attacker_pit_lap
+        description: Lap on which the attacker pitted.
+      - name: defender_pit_lap
+        description: Lap on which the defender pitted.
+      - name: comparison_lap
+        description: Lap at whose end the two are compared (defender's out-lap).
+      - name: attacker_position_before
+        description: Attacker's position at the end of the lap before pitting.
+      - name: attacker_position_after
+        description: Attacker's position at the end of the comparison lap.
+      - name: defender_position_after
+        description: Defender's position at the end of the comparison lap.
+      - name: is_success
+        description: True if the attacker came out ahead; empty if either driver has no position (e.g. retired).
+      - name: attacker_pitted_under_neutralisation
+        description: True if the attacker pitted under the Safety Car or VSC — a cheap stop, not a genuine undercut.
+
+unit_tests:
+  - name: test_grids_map_to_their_race
+    model: fct_session_results
+    given:
+      - input: ref('stg_openf1__session_result')
+        rows:
+          - {session_key: 11, meeting_key: 1, driver_number: 4, finish_position: 1}
+          - {session_key: 12, meeting_key: 1, driver_number: 4, finish_position: 3}
+          - {session_key: 21, meeting_key: 2, driver_number: 4, finish_position: 2}
+      - input: ref('stg_openf1__starting_grid')
+        rows:
+          - {qualifying_session_key: 13, meeting_key: 1, driver_number: 4, grid_position: 5}
+          - {qualifying_session_key: 14, meeting_key: 1, driver_number: 4, grid_position: 2}
+          - {qualifying_session_key: 23, meeting_key: 2, driver_number: 4, grid_position: 7}
+      - input: ref('stg_openf1__sessions')
+        rows:
+          - {session_key: 11, meeting_key: 1, session_type: Race, session_name: Race}
+          - {session_key: 12, meeting_key: 1, session_type: Race, session_name: Sprint}
+          - {session_key: 13, meeting_key: 1, session_type: Qualifying, session_name: Qualifying}
+          - {session_key: 14, meeting_key: 1, session_type: Qualifying, session_name: Sprint Qualifying}
+          - {session_key: 21, meeting_key: 2, session_type: Race, session_name: Sprint}
+          - {session_key: 23, meeting_key: 2, session_type: Qualifying, session_name: Sprint Shootout}
+    expect:
+      rows:
+        - {session_key: 11, driver_number: 4, grid_position: 5, finish_position: 1, positions_gained: 4}
+        - {session_key: 12, driver_number: 4, grid_position: 2, finish_position: 3, positions_gained: -1}
+        - {session_key: 21, driver_number: 4, grid_position: 7, finish_position: 2, positions_gained: 5}
+
+  - name: test_degradation_is_the_slope_of_clean_laps  # also: invalid stint 3 never reaches the mart
+    model: fct_stints
+    given:
+      - input: ref('stg_openf1__stints')
+        rows:
+          - {session_key: 1, meeting_key: 9, driver_number: 4, stint_number: 1, compound: MEDIUM, first_lap: 2, last_lap: 8, tyre_age_at_start: 0, has_valid_lap_range: true}
+          - {session_key: 1, meeting_key: 9, driver_number: 4, stint_number: 2, compound: HARD, first_lap: 9, last_lap: 12, tyre_age_at_start: 0, has_valid_lap_range: true}
+          - {session_key: 1, meeting_key: 9, driver_number: 4, stint_number: 3, compound: SOFT, first_lap: null, last_lap: null, tyre_age_at_start: 0, has_valid_lap_range: false}
+      - input: ref('int_laps_enriched')
+        rows:
+          - {session_key: 1, driver_number: 4, stint_number: 1, lap_number: 2, tyre_age_laps: 0, lap_time_s: 95.0, is_clean_lap: false}
+          - {session_key: 1, driver_number: 4, stint_number: 1, lap_number: 3, tyre_age_laps: 1, lap_time_s: 90.1, is_clean_lap: true}
+          - {session_key: 1, driver_number: 4, stint_number: 1, lap_number: 4, tyre_age_laps: 2, lap_time_s: 90.2, is_clean_lap: true}
+          - {session_key: 1, driver_number: 4, stint_number: 1, lap_number: 5, tyre_age_laps: 3, lap_time_s: 90.3, is_clean_lap: true}
+          - {session_key: 1, driver_number: 4, stint_number: 1, lap_number: 6, tyre_age_laps: 4, lap_time_s: 90.4, is_clean_lap: true}
+          - {session_key: 1, driver_number: 4, stint_number: 1, lap_number: 7, tyre_age_laps: 5, lap_time_s: 90.5, is_clean_lap: true}
+          - {session_key: 1, driver_number: 4, stint_number: 1, lap_number: 8, tyre_age_laps: 6, lap_time_s: 130.0, is_clean_lap: false}
+          - {session_key: 1, driver_number: 4, stint_number: 2, lap_number: 10, tyre_age_laps: 1, lap_time_s: 91.0, is_clean_lap: true}
+          - {session_key: 1, driver_number: 4, stint_number: 2, lap_number: 11, tyre_age_laps: 2, lap_time_s: 91.2, is_clean_lap: true}
+    expect:
+      rows:
+        - {stint_number: 1, laps_in_stint: 7, clean_laps: 5, mean_clean_lap_time_s: 90.3, degradation_s_per_lap: 0.1}
+        - {stint_number: 2, laps_in_stint: 4, clean_laps: 2, mean_clean_lap_time_s: 91.1, degradation_s_per_lap: null}
+
+  - name: test_pit_stops_fall_back_to_tyre_changes
+    model: fct_pit_stops
+    given:
+      - input: ref('stg_openf1__pit')
+        rows:
+          - {session_key: 1, meeting_key: 9, driver_number: 4, lap_number: 20, pit_lane_time_s: 21.5, stationary_time_s: 2.4}
+      - input: ref('stg_openf1__stints')
+        rows:
+          - {session_key: 1, meeting_key: 9, driver_number: 4, stint_number: 1, compound: MEDIUM, first_lap: 1, last_lap: 20}
+          - {session_key: 1, meeting_key: 9, driver_number: 4, stint_number: 2, compound: HARD, first_lap: 21, last_lap: 50}
+          - {session_key: 2, meeting_key: 8, driver_number: 4, stint_number: 1, compound: SOFT, first_lap: 1, last_lap: 15}
+          - {session_key: 2, meeting_key: 8, driver_number: 4, stint_number: 2, compound: HARD, first_lap: 16, last_lap: 57}
+      - input: ref('int_laps_enriched')
+        rows:
+          - {session_key: 1, driver_number: 4, lap_number: 19, position_end_of_lap: 2, neutralisation: null}
+          - {session_key: 1, driver_number: 4, lap_number: 20, position_end_of_lap: 2, neutralisation: SC}
+          - {session_key: 1, driver_number: 4, lap_number: 21, position_end_of_lap: 6, neutralisation: SC}
+    expect:
+      rows:
+        - {session_key: 1, lap_number: 20, source: pit, compound_before: MEDIUM, compound_after: HARD, position_before: 2, position_after: 6, is_under_neutralisation: true}
+        - {session_key: 2, lap_number: 15, source: stint_change, compound_before: SOFT, compound_after: HARD, position_before: null, position_after: null, is_under_neutralisation: false}
+
+  - name: test_undercut_success_failure_and_non_attempts
+    model: fct_undercut_attempts
+    given:
+      - input: ref('fct_pit_stops')
+        rows:
+          # 1: A=4 pits lap 20 right behind B=81; B answers lap 22; A ahead after → success
+          - {session_key: 1, driver_number: 4, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 1, driver_number: 81, lap_number: 22, is_under_neutralisation: false, neutralisation: null}
+          # 2: same, but B stays ahead → failure
+          - {session_key: 2, driver_number: 4, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 2, driver_number: 81, lap_number: 22, is_under_neutralisation: false, neutralisation: null}
+          # 3: B answers too late (n+5) → not an attempt
+          - {session_key: 3, driver_number: 4, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 3, driver_number: 81, lap_number: 25, is_under_neutralisation: false, neutralisation: null}
+          # 4: A was two places behind B → not an attempt
+          - {session_key: 4, driver_number: 4, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 4, driver_number: 81, lap_number: 21, is_under_neutralisation: false, neutralisation: null}
+          # 5: B pits on the same lap (n) → not a response, not an attempt
+          - {session_key: 5, driver_number: 4, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 5, driver_number: 81, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          # 6: B answers on the last lap of the window (n+3) → attempt, success
+          - {session_key: 6, driver_number: 4, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 6, driver_number: 81, lap_number: 23, is_under_neutralisation: false, neutralisation: null}
+          # 7: B answers just outside the window (n+4) → not an attempt
+          - {session_key: 7, driver_number: 4, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 7, driver_number: 81, lap_number: 24, is_under_neutralisation: false, neutralisation: null}
+          # 8: two cars both read P1 at their own line crossing; the one that crossed last before A is the car ahead
+          - {session_key: 8, driver_number: 4, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 8, driver_number: 81, lap_number: 21, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 8, driver_number: 16, lap_number: 21, is_under_neutralisation: false, neutralisation: null}
+          # 9: A pitted during a red flag → free tyre change, not an undercut
+          - {session_key: 9, driver_number: 4, lap_number: 20, is_under_neutralisation: true, neutralisation: RED}
+          - {session_key: 9, driver_number: 81, lap_number: 21, is_under_neutralisation: false, neutralisation: null}
+          # 10: the car one place ahead is a lap ahead on the road (crossed before A even started the lap)
+          - {session_key: 10, driver_number: 4, lap_number: 20, is_under_neutralisation: false, neutralisation: null}
+          - {session_key: 10, driver_number: 44, lap_number: 21, is_under_neutralisation: false, neutralisation: null}
+      - input: ref('int_laps_enriched')
+        rows:
+          - {session_key: 1, driver_number: 81, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:28", position_end_of_lap: 1}
+          - {session_key: 1, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 2}
+          - {session_key: 1, driver_number: 4, lap_number: 23, position_end_of_lap: 1}
+          - {session_key: 1, driver_number: 81, lap_number: 23, position_end_of_lap: 2}
+          - {session_key: 2, driver_number: 81, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:28", position_end_of_lap: 1}
+          - {session_key: 2, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 2}
+          - {session_key: 2, driver_number: 81, lap_number: 23, position_end_of_lap: 1}
+          - {session_key: 2, driver_number: 4, lap_number: 23, position_end_of_lap: 2}
+          - {session_key: 3, driver_number: 81, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:28", position_end_of_lap: 1}
+          - {session_key: 3, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 2}
+          - {session_key: 4, driver_number: 81, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:26", position_end_of_lap: 1}
+          - {session_key: 4, driver_number: 16, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:28", position_end_of_lap: 2}
+          - {session_key: 4, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 3}
+          - {session_key: 5, driver_number: 81, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:28", position_end_of_lap: 1}
+          - {session_key: 5, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 2}
+          - {session_key: 6, driver_number: 81, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:28", position_end_of_lap: 1}
+          - {session_key: 6, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 2}
+          - {session_key: 6, driver_number: 4, lap_number: 24, position_end_of_lap: 1}
+          - {session_key: 6, driver_number: 81, lap_number: 24, position_end_of_lap: 2}
+          - {session_key: 7, driver_number: 81, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:28", position_end_of_lap: 1}
+          - {session_key: 7, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 2}
+          - {session_key: 8, driver_number: 81, lap_number: 19, started_at: "2025-03-23 06:59:50", ended_at: "2025-03-23 07:01:20", position_end_of_lap: 1}
+          - {session_key: 8, driver_number: 16, lap_number: 19, started_at: "2025-03-23 06:59:55", ended_at: "2025-03-23 07:01:25", position_end_of_lap: 1}
+          - {session_key: 8, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 2}
+          - {session_key: 8, driver_number: 4, lap_number: 22, position_end_of_lap: 1}
+          - {session_key: 8, driver_number: 16, lap_number: 22, position_end_of_lap: 2}
+          - {session_key: 9, driver_number: 81, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:28", position_end_of_lap: 1}
+          - {session_key: 9, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 2}
+          - {session_key: 10, driver_number: 44, lap_number: 19, started_at: "2025-03-23 06:56:30", ended_at: "2025-03-23 06:58:00", position_end_of_lap: 4}
+          - {session_key: 10, driver_number: 4, lap_number: 19, started_at: "2025-03-23 07:00:00", ended_at: "2025-03-23 07:01:30", position_end_of_lap: 5}
+    expect:
+      rows:
+        - {session_key: 1, attacker_driver_number: 4, defender_driver_number: 81, defender_pit_lap: 22, comparison_lap: 23, is_success: true}
+        - {session_key: 2, attacker_driver_number: 4, defender_driver_number: 81, defender_pit_lap: 22, comparison_lap: 23, is_success: false}
+        - {session_key: 6, attacker_driver_number: 4, defender_driver_number: 81, defender_pit_lap: 23, comparison_lap: 24, is_success: true}
+        - {session_key: 8, attacker_driver_number: 4, defender_driver_number: 16, defender_pit_lap: 21, comparison_lap: 22, is_success: true}

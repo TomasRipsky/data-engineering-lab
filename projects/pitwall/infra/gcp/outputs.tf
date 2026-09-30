@@ -1,0 +1,15 @@
+output "lake_uri" {
+  value = "gs://${google_storage_bucket.raw.name}"
+}
+
+output "pipeline_service_account" {
+  value = google_service_account.pipeline.email
+}
+
+output "dashboard_service_account" {
+  value = var.env == "prod" ? google_service_account.dashboard[0].email : null
+}
+
+output "workload_identity_provider" {
+  value = google_iam_workload_identity_pool_provider.github.name
+}

@@ -1,0 +1,8 @@
+# Local raw lake used for manual runs
+.lake/
+
+# dbt
+transform/target/
+transform/logs/
+transform/dbt_packages/
+transform/.user.yml
