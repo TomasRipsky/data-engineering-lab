@@ -4,6 +4,8 @@ export default {
   root: "src",
   base: "/data-engineering-lab/",
   style: "style.css",
+  // No third-party requests: drop Framework's default Google Fonts stylesheet (pitwall self-hosts its font).
+  globalStylesheets: [],
   pages: [
     {
       name: "pitwall — F1 race strategy",

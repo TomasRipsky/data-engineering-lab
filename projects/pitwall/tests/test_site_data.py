@@ -71,11 +71,18 @@ def test_queries_only_read_marts():
 
 
 def test_tyre_wear_offers_a_fuel_corrected_curve():
-    # Cars get ~FUEL_S_PER_LAP faster each lap as fuel burns; the site shows both views.
+    # Cars get ~FUEL_S_PER_LAP faster each lap as fuel burns: the corrected curve adds it back.
     from pitwall.site_data import FUEL_S_PER_LAP
 
     assert 0.03 <= FUEL_S_PER_LAP <= 0.06
-    assert "median_delta_fuel_corrected_s" in QUERIES["tyre_wear"]
-    assert "{fuel_s_per_lap}" not in QUERIES["tyre_wear"].format(
-        project="p", fuel_s_per_lap=FUEL_S_PER_LAP
-    )
+    sql = QUERIES["tyre_wear"]
+    assert f"(l.lap_time_s + {FUEL_S_PER_LAP} * l.lap_number)" in sql
+    assert "median_delta_fuel_corrected_s" in sql
+    assert "__FUEL__" not in sql
+
+
+def test_export_refuses_to_publish_an_empty_site(tmp_path):
+    # An empty prod (e.g. just recreated) must fail the run so the last good site stays online.
+    client = FakeClient(pa.table({"n": pa.array([], pa.int64())}))
+    with pytest.raises(ValueError, match="races"):
+        export(tmp_path / "data", project="p", client=client)

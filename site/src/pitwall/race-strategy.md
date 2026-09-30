@@ -4,6 +4,7 @@ style: pitwall.css
 ---
 
 ```js
+import "./components/fonts.js";
 import {rows} from "../components/lab.js";
 import {
   compoundColor,

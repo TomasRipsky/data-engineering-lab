@@ -1,5 +1,5 @@
 /* pitwall theme: a dark pit-wall screen. Shared structure comes from lab.css. */
-@import url("https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;0,700;0,900;1,900&display=swap");
+/* Titillium Web (SIL OFL 1.1) is served by this site and registered by components/fonts.js. */
 @import url("observablehq:default.css");
 @import url("observablehq:theme-near-midnight.css");
 @import url("../components/lab.css");
@@ -11,11 +11,12 @@
   --pw-ink: #f0f0f0;
   --pw-muted: #a3a3b3;
   --pw-red: #e10600;
+  --pw-red-text: #ff5a52; /* red for small text: >= 4.5:1 on the dark panels */
   --theme-background: var(--pw-surface);
   --theme-background-alt: var(--pw-panel);
   --theme-foreground: var(--pw-ink);
   --theme-foreground-muted: var(--pw-muted);
-  --theme-foreground-faint: #6b6b7b;
+  --theme-foreground-faint: #8a8a9a;
   --theme-foreground-faintest: var(--pw-line);
   --theme-foreground-focus: var(--pw-red);
   --sans-serif: "Titillium Web", system-ui, -apple-system, sans-serif;
@@ -45,7 +46,11 @@ h3 {
 }
 
 .tip::before {
-  color: var(--pw-red);
+  color: var(--pw-red-text);
+}
+
+a {
+  color: var(--pw-red-text);
 }
 
 .big {
@@ -93,7 +98,7 @@ h3 {
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--pw-red) !important;
+  color: var(--pw-red-text) !important;
 }
 
 .pw-hero .pw-car {
@@ -193,7 +198,7 @@ h3 {
   font-size: 0.75rem;
   font-weight: 900;
   font-style: italic;
-  color: var(--pw-red);
+  color: var(--pw-red-text);
 }
 
 @media (max-width: 640px) {

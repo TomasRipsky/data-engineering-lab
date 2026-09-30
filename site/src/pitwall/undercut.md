@@ -4,6 +4,7 @@ style: pitwall.css
 ---
 
 ```js
+import "./components/fonts.js";
 import {rows, fmt} from "../components/lab.js";
 const attempts = rows(await FileAttachment("data/undercuts.parquet").parquet())
   .filter((d) => d.is_success !== null)

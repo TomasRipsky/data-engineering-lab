@@ -5,6 +5,7 @@ toc: false
 ---
 
 ```js
+import "./components/fonts.js";
 import {rows, fmt} from "../components/lab.js";
 import {tyre, tyreLegend} from "./components/f1.js";
 import {car, chequered} from "./components/art.js";

@@ -13,7 +13,7 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-# Lap time gained per lap as fuel burns (about 1.7 kg of fuel per lap x ~0.03 s per kg).
+# Lap time gained per lap as fuel burns (about 1.8 kg of fuel per lap x ~0.03 s per kg).
 # A common modelling assumption in F1 analysis, shown and explained on the site.
 FUEL_S_PER_LAP = 0.055
 
@@ -174,10 +174,15 @@ def export(out_dir: Path, *, project: str | None = None, client: Any = None) -> 
         from google.cloud import bigquery
 
         client = bigquery.Client(project=project)
+    tables = {
+        name: browser_friendly(query(sql, project=project, client=client))
+        for name, sql in QUERIES.items()
+    }
+    # Never publish an empty site: failing here keeps the last good version online.
+    empty = [name for name in ("races", "stints") if tables[name].num_rows == 0]
+    if empty:
+        raise ValueError(f"refusing to export an empty site: no rows in {', '.join(empty)}")
     out_dir.mkdir(parents=True, exist_ok=True)
-    written = {}
-    for name, sql in QUERIES.items():
-        table = browser_friendly(query(sql, project=project, client=client))
+    for name, table in tables.items():
         pq.write_table(table, out_dir / f"{name}.parquet", compression="snappy")
-        written[name] = table.num_rows
-    return written
+    return {name: table.num_rows for name, table in tables.items()}

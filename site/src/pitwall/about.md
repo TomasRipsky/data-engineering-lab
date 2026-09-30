@@ -4,6 +4,7 @@ style: pitwall.css
 ---
 
 ```js
+import "./components/fonts.js";
 import {rows} from "../components/lab.js";
 import {pipelineLap} from "./components/art.js";
 const races = rows(await FileAttachment("data/races.parquet").parquet());
@@ -53,6 +54,6 @@ Code, tests and design decisions: [github.com/TomasRipsky/data-engineering-lab](
 
 <div class="note">
 
-OpenF1 is unofficial and not affiliated with Formula 1. Its data has gaps (for example missing pit timings in some 2023 races); the pipeline documents and works around them rather than hiding them. Illustrations on this site are original.
+OpenF1 is unofficial and not affiliated with Formula 1. Its data has gaps (for example missing pit timings in some 2023 races); the pipeline documents and works around them rather than hiding them. Illustrations on this site are original. This site is unofficial and not associated in any way with the Formula 1 companies; F1 and FORMULA 1 are trade marks of Formula One Licensing B.V.
 
 </div>

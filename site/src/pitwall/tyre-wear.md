@@ -4,6 +4,7 @@ style: pitwall.css
 ---
 
 ```js
+import "./components/fonts.js";
 import {rows} from "../components/lab.js";
 import {compoundColor, tyre, tyreLegend} from "./components/f1.js";
 const wear = rows(await FileAttachment("data/tyre_wear.parquet").parquet());
@@ -93,6 +94,6 @@ display(
 
 <div class="note">
 
-The fuel correction is an assumption: about 1.7 kg of fuel burned per lap at roughly 0.03 s per kg, i.e. ${FUEL_S_PER_LAP} s per lap, the same for every car and circuit. Real fuel effects vary a little, so treat the corrected numbers as estimates. Only tyre ages with at least 5 clean laps are shown.
+The fuel correction is an assumption: about 1.8 kg of fuel burned per lap at roughly 0.03 s per kg, i.e. about ${FUEL_S_PER_LAP} s per lap, the same for every car and circuit. Real fuel effects vary a little, so treat the corrected numbers as estimates. The curves pool stints of different lengths, which flattens them at high tyre ages; the table's per-stint figure (the slope of each stint on its own) is the more precise measure. Only tyre ages with at least 5 clean laps are shown.
 
 </div>

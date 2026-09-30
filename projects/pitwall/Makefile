@@ -48,10 +48,10 @@ site-data: ## Export pitwall's section data from $(PROJECT_ID) marts into the la
 	uv run pitwall site-export --out $(SITE_DIR)/src/pitwall/data
 
 site: site-data ## Build the whole lab site into site/dist
-	cd $(SITE_DIR) && npm ci --silent && npm run build
+	cd $(SITE_DIR) && npm ci --silent --ignore-scripts && npm run build
 
 site-preview: site-data ## Live-reloading lab site on http://127.0.0.1:3000
-	cd $(SITE_DIR) && npm ci --silent && npm run dev
+	cd $(SITE_DIR) && npm ci --silent --ignore-scripts && npm run dev
 
 bootstrap: ## One-off per env: create project, link billing, budget alert. BILLING_ACCOUNT=XXXXXX-XXXXXX-XXXXXX ORG_ID=XXXXXXXXXXXX
 	@test -n "$(BILLING_ACCOUNT)" || { echo "set BILLING_ACCOUNT (see: gcloud billing accounts list)"; exit 1; }
