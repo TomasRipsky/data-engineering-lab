@@ -1,0 +1,68 @@
+version: 2
+
+models:
+  - name: int_neutralised_laps
+    description: >
+      Grain: one row per session, lap and neutralisation type. A period starts with
+      "(VIRTUAL) SAFETY CAR DEPLOYED" and ends on the lap of "SAFETY CAR IN THIS LAP" or
+      "VIRTUAL SAFETY CAR ENDING". A period with no end message runs until the lap before the
+      next deployment of the same type, or to the session's last lap.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_key, lap_number, neutralisation]
+    columns:
+      - name: session_key
+        description: "{{ doc('session_key') }}"
+      - name: lap_number
+        description: "{{ doc('lap_number') }}"
+      - name: neutralisation
+        description: "{{ doc('neutralisation') }}"
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [SC, VSC]
+
+unit_tests:
+  - name: test_neutralised_laps_pair_starts_with_ends
+    model: int_neutralised_laps
+    given:
+      - input: ref('stg_openf1__race_control')
+        rows:
+          - {session_key: 1, recorded_at: "2025-03-23 07:20:00", lap_number: 10, category: SafetyCar, message: SAFETY CAR DEPLOYED}
+          - {session_key: 1, recorded_at: "2025-03-23 07:24:00", lap_number: 12, category: SafetyCar, message: SAFETY CAR IN THIS LAP}
+          - {session_key: 1, recorded_at: "2025-03-23 07:50:00", lap_number: 30, category: SafetyCar, message: VIRTUAL SAFETY CAR DEPLOYED}
+          - {session_key: 1, recorded_at: "2025-03-23 07:51:00", lap_number: 30, category: Flag, message: YELLOW IN TRACK SECTOR 2}
+      - input: ref('stg_openf1__laps')
+        rows:
+          - {session_key: 1, lap_number: 32}
+    expect:
+      rows:
+        - {session_key: 1, lap_number: 10, neutralisation: SC}
+        - {session_key: 1, lap_number: 11, neutralisation: SC}
+        - {session_key: 1, lap_number: 12, neutralisation: SC}
+        - {session_key: 1, lap_number: 30, neutralisation: VSC}
+        - {session_key: 1, lap_number: 31, neutralisation: VSC}
+        - {session_key: 1, lap_number: 32, neutralisation: VSC}
+
+  - name: test_unended_period_stops_before_the_next_one
+    model: int_neutralised_laps
+    given:
+      - input: ref('stg_openf1__race_control')
+        rows:
+          # first SC has no end message; a second SC is deployed on lap 9 and ends on lap 10
+          - {session_key: 2, recorded_at: "2025-03-23 07:10:00", lap_number: 5, category: SafetyCar, message: SAFETY CAR DEPLOYED}
+          - {session_key: 2, recorded_at: "2025-03-23 07:20:00", lap_number: 9, category: SafetyCar, message: SAFETY CAR DEPLOYED}
+          - {session_key: 2, recorded_at: "2025-03-23 07:23:00", lap_number: 10, category: SafetyCar, message: SAFETY CAR IN THIS LAP}
+      - input: ref('stg_openf1__laps')
+        rows:
+          - {session_key: 2, lap_number: 30}
+    expect:
+      # laps 5-8 (first period, up to the lap before the next deployment) + 9-10; never 11-30
+      rows:
+        - {session_key: 2, lap_number: 5, neutralisation: SC}
+        - {session_key: 2, lap_number: 6, neutralisation: SC}
+        - {session_key: 2, lap_number: 7, neutralisation: SC}
+        - {session_key: 2, lap_number: 8, neutralisation: SC}
+        - {session_key: 2, lap_number: 9, neutralisation: SC}
+        - {session_key: 2, lap_number: 10, neutralisation: SC}
