@@ -44,6 +44,18 @@ Lessons learned the hard way, each turned into a rule that prevents it. A lesson
 - **Rule:** shell in skills must be portable across bash and zsh (prefer `sed`/`grep` over shell-specific features) and be exercised once on real input before it is trusted.
 - **Applied in:** `.claude/skills/ship/` step 1.
 
+### Shell variables do not survive between tool calls
+- **Symptom:** `pr-reviewer` found that `ship` and `release` set `ISSUE`, `PR` and `V` in one bash block and used them in later ones. Run as separate calls they were empty — and `grep -qw ""` matches anything, so the issue-link check passed no matter what; `release` would have created a public issue titled "release v".
+- **Cause:** each Bash tool call is a fresh shell (only the working directory persists); the skills were written as if they were one script.
+- **Rule:** every bash block in a skill is self-contained — it derives its values again (`git branch`, `gh pr view`) or uses text substituted at invocation (`$ARGUMENTS`), and guards required values with `: "${VAR:?message}"`. Dependent steps go in the same block.
+- **Applied in:** `.claude/skills/ship/` (steps 3, 6), `.claude/skills/release/`.
+
+### Test permission rules with decoys, and know the matcher
+- **Symptom:** while extending the deny rules, test results seemed to contradict the rules just written; `.env.example` was denied and `.env.local` allowed.
+- **Cause:** three things at once. Claude Code reloads `settings.json` asynchronously, so a read right after an edit ran under the *previous* rules. Rule patterns have no bracket negation: `[!e]` and `[^e]` are literal classes (`{!, e}`, `{^, e}`). And the Read tool caches unchanged files, so re-reading a decoy proves nothing.
+- **Rule:** test deny rules with decoy files whose content changes between rounds, re-test after the reload has had time to happen, cover both "must be denied" and "must stay readable"; enumerate names instead of relying on negation.
+- **Applied in:** `.claude/settings.json`, `lab/security-and-cost.md`.
+
 ### A hidden browser pane pauses Observable
 - **Symptom:** while verifying the pitwall site, screenshots showed stale or empty charts although the data was right.
 - **Cause:** browsers throttle hidden pages; Observable Framework's reactive runtime pauses when the pane is not visible.

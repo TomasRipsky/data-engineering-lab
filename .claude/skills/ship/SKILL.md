@@ -5,13 +5,15 @@ description: Take the current work branch from committed, verified changes to me
 
 # Ship
 
+**Every bash block below is self-contained:** shell variables do not survive between tool calls, so each block derives `ISSUE`/`PR` again. Never carry a value from an earlier block.
+
 Merge authority (CLAUDE.md): I squash-merge into `dev` once CI is green and review is clean. Releases and PRs into `main` are not shipped here — they go through `/release`, which Tomas runs.
 
 ## 1. Preconditions
 ```bash
 BRANCH=$(git branch --show-current)
 ISSUE=$(sed -nE 's#^(feat|fix|docs|refactor|test|chore|ci|infra)/([0-9]+)-.*#\2#p' <<<"$BRANCH")  # portable: bash and zsh
-[[ -n "$ISSUE" ]] || { echo "not a work branch: $BRANCH"; exit 1; }
+: "${ISSUE:?not a work branch: $BRANCH}"
 [[ -z "$(git status --porcelain)" ]] || { echo "working tree not clean"; exit 1; }
 git fetch -q origin dev && git log --oneline origin/dev..HEAD
 ```
@@ -26,13 +28,15 @@ The body starts with `Closes #$ISSUE`, then a summary, verification results, and
 
 ## 3. Check the issue link before merging
 ```bash
-PR=$(gh pr view --json number -q .number)
-gh pr view "$PR" --json closingIssuesReferences -q '[.closingIssuesReferences[].number]' | grep -qw "$ISSUE" \
-  || echo "issue #$ISSUE not linked: fix the body (Closes #$ISSUE on its own line) and re-check"
+ISSUE=$(git branch --show-current | sed -nE 's#^[a-z]+/([0-9]+)-.*#\1#p'); : "${ISSUE:?not a work branch}"
+PR=$(gh pr view --json number -q .number); : "${PR:?no PR for this branch}"
+gh pr view "$PR" --json closingIssuesReferences -q '.closingIssuesReferences[].number' | grep -qx "$ISSUE" \
+  && echo "issue #$ISSUE linked to PR #$PR" \
+  || echo "STOP: issue #$ISSUE not linked — put 'Closes #$ISSUE' on its own line in the body and re-check"
 ```
 
 ## 4. CI
-Read the app's PR status (`get_status`). Never poll in a loop, sleep, or schedule checks: if checks are pending, end the turn and resume on the CI event or when Tomas says so. A failing check → systematic debugging, fix, push, re-read status.
+Read the app's PR status (`get_status`) when the tool exists, otherwise one `gh pr checks`. Never poll in a loop, sleep, or schedule checks: if checks are pending, end the turn and resume on the CI event or when Tomas says so. A failing check → systematic debugging, fix, push, re-read status. Workflows are path-filtered: a PR that touches no project may report **no checks at all** — then the local gates of step 1 are the CI, and nothing will arrive to wait for.
 
 ## 5. Review
 Non-trivial change (pipeline, SQL model, infra, dependency, workflow, hook, skill) → run the `pr-reviewer` agent on the branch with the plan's Review Focus. Then:
@@ -41,20 +45,26 @@ Non-trivial change (pipeline, SQL model, infra, dependency, workflow, hook, skil
 - Fix Critical/Important with a check that fails first, then passes; push; re-read CI.
 - Anything declined is a ruling with its cost-if-wrong, reported to Tomas.
 
-## 6. Merge
+## 6. Merge and close the issue
+One block, so `ISSUE` and `PR` are still known after the branch is deleted:
 ```bash
-gh pr merge "$PR" --squash --delete-branch
-git switch dev && git pull --ff-only    # gh may leave local dev behind
+ISSUE=$(git branch --show-current | sed -nE 's#^[a-z]+/([0-9]+)-.*#\1#p'); : "${ISSUE:?not a work branch}"
+PR=$(gh pr view --json number -q .number); : "${PR:?no PR for this branch}"
+gh pr checks "$PR" >/dev/null 2>&1; rc=$?   # 0 = all passed, 8 = pending, other = failed or none reported
+if [[ $rc -eq 8 ]]; then echo "STOP: checks pending"
+elif [[ $rc -ne 0 ]] && ! gh pr checks "$PR" 2>&1 | grep -q "no checks reported"; then echo "STOP: checks failing"
+elif gh pr merge "$PR" --squash --delete-branch --match-head-commit "$(git rev-parse HEAD)"; then
+  git switch dev && git pull --ff-only      # gh may leave local dev behind
+  [[ "$(gh issue view "$ISSUE" --json state -q .state)" == CLOSED ]] \
+    || gh issue close "$ISSUE" --comment "Delivered by #$PR."
+  echo "merged PR #$PR; issue #$ISSUE: $(gh issue view "$ISSUE" --json state -q .state)"
+fi
 ```
+- `--match-head-commit` refuses the merge if anything was pushed after the review.
+- "no checks reported" passes only because step 4 established that no workflow applies.
+- GitHub registers the link but does not always close the issue on merge into `dev` (cause unknown — `agent/lessons.md`), hence the explicit check.
 
-## 7. Issue closed?
-```bash
-[[ "$(gh issue view "$ISSUE" --json state -q .state)" == CLOSED ]] \
-  || gh issue close "$ISSUE" --comment "Delivered by #$PR."
-```
-GitHub registers the link but does not always close the issue on merge into `dev` (cause unknown — `agent/lessons.md`).
-
-## 8. Record and report
+## 7. Record and report
 - Update memory (`lab-state`) if the project state changed.
 - If a lesson surfaced, apply it now (`agent/lessons.md` + `agent/CHANGELOG.md`).
 - Tell Tomas: PR link, merge commit, issue state, rulings and deferred minors.
