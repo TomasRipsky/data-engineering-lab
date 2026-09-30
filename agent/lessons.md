@@ -20,4 +20,5 @@ Lessons learned the hard way, each turned into a rule that prevents it. A lesson
 - **Symptom:** moving pitwall's historical plans under `projects/pitwall/` made the `ruff-format` pre-commit hook rewrite 160+ lines of Python code blocks inside them, and the commit failed.
 - **Cause:** ruff ≥ 0.16 formats Python blocks in Markdown and resolves its settings from the nearest `pyproject.toml` — the moved files inherited pitwall's `line-length = 100`. A rename counts as a changed file, so the hook ran on them.
 - **Rule:** before a move, ask which tools resolve configuration by location (ruff, dbt, Terraform, pytest). Keep moves and edits in separate commits so git still detects the rename. Records (specs, plans) are excluded from formatters.
-- **Applied in:** `.pre-commit-config.yaml` (`ruff-format` excludes `/design/(plans|specs)/`), lab ADR 0006.
+- **Applied in:** ruff config of every project (`extend-exclude = ["docs/design"]` in `projects/*/pyproject.toml`, so `make lint` and pre-commit agree) and `.pre-commit-config.yaml` for lab-level designs; lab ADR 0006.
+- **Follow-up:** the first fix lived only in pre-commit, so `make lint` still failed — exclude in the *tool's* config, not in one caller of the tool.

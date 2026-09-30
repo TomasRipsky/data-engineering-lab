@@ -24,5 +24,5 @@ Every question has exactly one place (table in `lab/conventions.md`). `CLAUDE.md
 ## Consequences
 - Specs and plans executed before this change keep the old `docs/...` paths in their text: they are records and are not rewritten.
 - Superpowers skills default to `docs/superpowers/`; `CLAUDE.md` overrides the location.
-- `ruff-format` skips `*/design/{plans,specs}/`: ruff formats Python blocks inside Markdown with the nearest project's settings, which would rewrite records.
+- ruff skips specs and plans (`extend-exclude = ["docs/design"]` in each project's ruff config, plus a pre-commit exclude for `lab/design/`): ruff formats Python blocks inside Markdown with the nearest project's settings, which would rewrite records.
 - New projects get the layout from `projects/_template/` through the `new-project` skill.

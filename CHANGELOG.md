@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+### Changed
+- Repo restructured into the world (`lab/`, `agent/`) and countries (`projects/`) model: lab ADRs and designs live in `lab/`, project specs and plans in `projects/<p>/docs/design/`, and `docs/` is gone ([lab ADR 0006](lab/adr/0006-world-and-countries-structure.md)).
+- `CLAUDE.md` rewritten as a short constitution of hard rules; `README.md` is now the world map.
+- ruff skips specs and plans (project ruff config and pre-commit): they are records, not code.
+
+### Added
+- `lab/conventions.md`, `lab/security-and-cost.md` and `lab/tech-radar.md`.
+- `agent/`: how Claude works in the lab, its changelog and its lessons.
+- Project template: `docs/guide.md` (how it works inside) and `docs/design/`; `new-project` checks that the chosen stack is industry-standard.
+
 ## [0.4.0] - 2026-09-30
 
 ### Added
