@@ -1,4 +1,4 @@
-.PHONY: setup test lint fmt ingest load bootstrap init plan apply destroy
+.PHONY: setup test lint fmt ingest load transform bootstrap init plan apply destroy
 
 ENV ?= dev
 PROJECT_PREFIX ?= pitwall-tr
@@ -35,6 +35,12 @@ ingest: ## Pull OpenF1 data into $$PITWALL_LAKE_URI (default .lake/). Usage: mak
 
 load: ## Rebuild BigQuery raw tables in $(PROJECT_ID) from the lake
 	uv run pitwall load
+
+transform/profiles.yml: transform/profiles.yml.example
+	cp $< $@
+
+transform: transform/profiles.yml ## Build and test the dbt models in $(PROJECT_ID)
+	cd transform && uv run dbt deps --quiet && uv run dbt build --target $(ENV) --profiles-dir .
 
 bootstrap: ## One-off per env: create project, link billing, budget alert. BILLING_ACCOUNT=XXXXXX-XXXXXX-XXXXXX ORG_ID=651783965785
 	@test -n "$(BILLING_ACCOUNT)" || { echo "set BILLING_ACCOUNT (see: gcloud billing accounts list)"; exit 1; }

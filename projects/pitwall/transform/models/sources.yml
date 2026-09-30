@@ -1,0 +1,32 @@
+version: 2
+
+sources:
+  - name: openf1
+    description: Raw OpenF1 data, rebuilt from the GCS lake by `pitwall load`. One table per API endpoint, Race and Sprint sessions only.
+    database: "{{ env_var('PITWALL_BQ_PROJECT') }}"
+    schema: raw
+    tables:
+      - name: openf1_meetings
+        description: One row per race weekend (and testing) of each ingested season.
+      - name: openf1_sessions
+        description: One row per session (practice, qualifying, sprint, race) of each ingested season.
+      - name: openf1_drivers
+        description: Drivers taking part in each session, with their team.
+      - name: openf1_laps
+        description: One row per lap per driver, with lap and sector times.
+      - name: openf1_stints
+        description: Tyre stints — continuous runs on one set of tyres.
+      - name: openf1_pit
+        description: Pit-lane visits, with time spent in the lane and stationary.
+      - name: openf1_position
+        description: Every change in running order, with its timestamp.
+      - name: openf1_weather
+        description: Weather at the track about once a minute (not modelled in v1).
+      - name: openf1_race_control
+        description: Messages from race control — flags, safety car, penalties.
+      - name: openf1_session_result
+        description: Final classification of each session.
+      - name: openf1_overtakes
+        description: Position swaps between two drivers (not modelled in v1).
+      - name: openf1_starting_grid
+        description: Starting grid, attached by OpenF1 to the qualifying session that produced it.

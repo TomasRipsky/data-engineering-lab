@@ -1,0 +1,26 @@
+name: pitwall
+version: "1.0.0"
+profile: pitwall
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+
+clean-targets: ["target", "dbt_packages"]
+
+data_tests:
+  pitwall:
+    +store_failures: true # failing rows land in the `audit` dataset for inspection
+    +schema: audit
+
+models:
+  pitwall:
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +schema: intermediate
+      +materialized: view
+    marts:
+      +schema: marts
+      +materialized: table
