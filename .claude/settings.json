@@ -42,7 +42,12 @@
       "Read(/**/.env.ci*)",
       "Read(/**/.env.backup*)",
       "Read(/**/.env.bak*)",
-      "Read(/**/.env.old*)"
+      "Read(/**/.env.old*)",
+      "Read(~/.config/gcloud/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.azure/**)",
+      "Read(~/.databrickscfg)",
+      "Read(~/.kube/**)"
     ]
   },
   "enabledMcpjsonServers": [

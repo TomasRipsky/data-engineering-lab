@@ -34,7 +34,7 @@ Lessons learned the hard way, each turned into a rule that prevents it. A lesson
 
 ### `Closes #n` did not close the issue
 - **Symptom:** several PRs squash-merged into `dev` (the default branch) left their issue open although the body started with `Closes #n` — #33 included; #19 with the same format closed.
-- **Cause:** unknown. GitHub does register the link (`closingIssuesReferences` lists the issue), so parsing is not the problem, and waiting 30+ minutes did not help.
+- **Cause:** unknown, and intermittent: GitHub registers the link (`closingIssuesReferences` lists the issue), so parsing is not the problem, and waiting 30+ minutes did not help. With the same flow, #32 (PR #33) stayed open while #34 (PR #35, merged by the `ship` skill with `--match-head-commit`) closed on its own.
 - **Rule:** check the link before merging and the issue state after; close it manually with "Delivered by #<pr>" if still open.
 - **Applied in:** `.claude/skills/ship/` (steps 3 and 7).
 
