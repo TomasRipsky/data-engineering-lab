@@ -21,7 +21,7 @@ Every logical block of work (2–4 related tasks) follows the same loop:
 3. **Tutor review** — my reasoning as an elite engineer: why, how, the alternatives, and the technical characteristics worth keeping in mind. No quiz questions.
 4. **Vault** — each technology or technique used becomes a didactic note in Tomas's private Obsidian vault, built on concrete cases from our code (how it works inside, why it was configured so, local vs production, problems we hit).
 
-The full protocol and the vault note standard: `tutoring.md` (Lab 1.0, plan B).
+The full protocol and the vault note standard: [`tutoring.md`](tutoring.md).
 
 ## Memory
 
