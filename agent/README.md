@@ -21,7 +21,7 @@ Every logical block of work (2–4 related tasks) follows the same loop:
 3. **Tutor review** — my reasoning as an elite engineer: why, how, the alternatives, and the technical characteristics worth keeping in mind. No quiz questions.
 4. **Vault** — each technology or technique used becomes a didactic note in Tomas's private Obsidian vault, built on concrete cases from our code (how it works inside, why it was configured so, local vs production, problems we hit).
 
-The full protocol and the vault note standard: `tutoring.md` (Lab 1.0, plan B).
+The full protocol and the vault note standard: [`tutoring.md`](tutoring.md).
 
 ## Memory
 
@@ -40,6 +40,7 @@ The premise is **the highest possible quality while containing cost**, so the pa
 - Files loaded in every session (`CLAUDE.md`, the memory index) hold whatever I must never forget — a rule that is not loaded is a rule that gets broken. They may grow when that pays off.
 - Detail needed only sometimes lives in skills and linked docs, read when relevant.
 - Targeted reads over broad sweeps; no speculative scaffolding; agents only where a task repeats or needs an independent context.
+- **Lean plans:** documents are specified by their required content (checked by grep), code is written in full, and a repeated pattern references the earlier plan instead of being rewritten.
 
 ## How I evolve
 
@@ -55,10 +56,15 @@ The premise is **the highest possible quality while containing cost**, so the pa
 | `new-project` | skill | Bootstraps a project: issue, branch, template copy, industry-standard check, registration, PR | [.claude/skills/new-project/](../.claude/skills/new-project/SKILL.md) |
 | `pr-reviewer` | agent | Independent read-only review of a PR before merging, with ranked findings | [.claude/agents/pr-reviewer.md](../.claude/agents/pr-reviewer.md) |
 | `reviewer-bash-allowlist` | hook | Restricts the reviewer's Bash to inspection commands | [.claude/hooks/](../.claude/hooks/reviewer-bash-allowlist.sh) |
-
-Coming in Lab 1.0 plan B: `ship` and `release` skills, a `verify-before-design` skill, and a session-start "world status" hook.
+| `ship` | skill | Branch → PR → CI → review → squash merge → issue closed → memory updated | [.claude/skills/ship/](../.claude/skills/ship/SKILL.md) |
+| `release` | skill (Tomas only) | Changelogs → `dev → main` merge commit → GitHub release; runs only when Tomas types `/release X.Y.Z` | [.claude/skills/release/](../.claude/skills/release/SKILL.md) |
+| `verify-before-design` | skill | Verified-facts checklist before designing cloud, auth, CI or pinned versions | [.claude/skills/verify-before-design/](../.claude/skills/verify-before-design/SKILL.md) |
+| `world-status` | hook | At session start: branch, open issues and PRs, last pipeline run | [.claude/hooks/world-status.sh](../.claude/hooks/world-status.sh) |
+| deny rules | settings | Block reading the secret patterns `.gitignore` blocks | [.claude/settings.json](../.claude/settings.json) |
 
 ## Files here
 
 - [`CHANGELOG.md`](CHANGELOG.md) — what changed in how I work, and why.
+- [`tutoring.md`](tutoring.md) — the tutoring protocol and the vault note standard.
 - [`lessons.md`](lessons.md) — lessons learned the hard way, each with the rule that now prevents it.
+- [`retros/`](retros/) — one record per project retro and what changed because of it.

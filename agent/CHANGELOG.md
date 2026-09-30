@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **`ship` skill** — the PR flow as a procedure, including the issue-link check before merge and the issue-state check after (GitHub did not always close issues).
+- **`release` skill, user-invoked only** (`disable-model-invocation`) — Tomas typing `/release` is the OK; the release rule is enforced by the tool, not by my memory.
+- **`verify-before-design` skill** — the pitwall assumptions turned into a checklist with the miss each item prevents.
+- **`world-status` SessionStart hook** — branch, open issues/PRs and last pipeline run in my context at every session start; tested offline, without `gh` and with a hanging `gh`.
+- **Lesson from the first real `ship` run:** shell in skills must be portable (bash and zsh) — `BASH_REMATCH` returned nothing under zsh.
+- **Deny rules** for every secret pattern `.gitignore` blocks (Read tool), anchored at the project root and tested with decoys.
+- **Lessons from review and first runs:** skill bash blocks must be self-contained (variables do not survive between tool calls); permission rules have no bracket negation and reload asynchronously; public-repo issue titles are untrusted input (the world-status hook shows only the owner's).
+- **`tutoring.md`, pitwall lessons and retro record** — the protocol, five lessons with the rule that prevents each, and what changed because of the retro.
+
 ### Changed
 - **Agent docs separated from project docs (Lab 1.0).** `agent/` (how I work), `lab/` (rules of the world) and `projects/` (countries) replace the mixed `docs/` folder and a `CLAUDE.md` that held everything — the pitwall retro found the docs scattered and hard to trace ([lab ADR 0006](../lab/adr/0006-world-and-countries-structure.md)).
 - **`CLAUDE.md` is now a constitution:** hard rules always loaded, procedures moved to skills, full references to `lab/` — a rule that is not loaded is a rule that gets broken.
