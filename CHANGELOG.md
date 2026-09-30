@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-30
+
 ### Added
 - `pitwall`: CI (lint, tests, terraform validate, dbt in per-PR datasets) and a scheduled/manual pipeline via Workload Identity Federation; production environment (dev/prod GitHub Environments, prod runs released code from `main`).
 - `pitwall`: dbt project (staging → intermediate → marts) with tyre degradation, pit stops and undercut detection; unit-tested racing rules; data-quality rules on raw data with failing rows stored in an `audit` dataset.
