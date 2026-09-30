@@ -56,7 +56,7 @@ git switch -c "feat/${URL##*/}-pitwall-dbt"
 
 - [ ] **Step 1b: Projects belong to the organization; add the `audit` dataset**
 
-In `projects/pitwall/Makefile`, in the `bootstrap` target: change the usage hint to `BILLING_ACCOUNT=... ORG_ID=651783965785`, add a guard line after the BILLING_ACCOUNT one:
+In `projects/pitwall/Makefile`, in the `bootstrap` target: change the usage hint to `BILLING_ACCOUNT=... ORG_ID=XXXXXXXXXXXX`, add a guard line after the BILLING_ACCOUNT one:
 
 ```make
 	@test -n "$(ORG_ID)" || { echo "set ORG_ID (see: gcloud organizations list)"; exit 1; }
@@ -74,8 +74,8 @@ In `projects/pitwall/infra/gcp/main.tf` change `datasets` to:
   datasets = ["raw", "staging", "intermediate", "marts", "audit"]
 ```
 
-Run: `cd projects/pitwall && make -n bootstrap BILLING_ACCOUNT=x ORG_ID=651783965785 | head -3 && make plan`
-Expected: the create line carries `--organization=651783965785`; the plan adds exactly 2 resources (dataset `audit` + its pipeline IAM member). Then `terraform -chdir=infra/gcp apply -auto-approve -var env=dev -var project_id=pitwall-tr-dev` (US$0: an empty dataset).
+Run: `cd projects/pitwall && make -n bootstrap BILLING_ACCOUNT=x ORG_ID=XXXXXXXXXXXX | head -3 && make plan`
+Expected: the create line carries `--organization=XXXXXXXXXXXX`; the plan adds exactly 2 resources (dataset `audit` + its pipeline IAM member). Then `terraform -chdir=infra/gcp apply -auto-approve -var env=dev -var project_id=pitwall-tr-dev` (US$0: an empty dataset).
 
 ```bash
 git add Makefile infra/gcp/main.tf

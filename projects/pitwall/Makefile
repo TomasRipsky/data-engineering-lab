@@ -1,4 +1,4 @@
-.PHONY: setup test lint fmt ingest load transform bootstrap init plan apply destroy
+.PHONY: setup test lint fmt ingest load transform bootstrap init plan apply destroy gh-vars
 
 ENV ?= dev
 PROJECT_PREFIX ?= pitwall-tr
@@ -42,7 +42,7 @@ transform/profiles.yml: transform/profiles.yml.example
 transform: transform/profiles.yml ## Build and test the dbt models in $(PROJECT_ID)
 	cd transform && uv run dbt deps --quiet && uv run dbt build --target $(ENV) --profiles-dir .
 
-bootstrap: ## One-off per env: create project, link billing, budget alert. BILLING_ACCOUNT=XXXXXX-XXXXXX-XXXXXX ORG_ID=651783965785
+bootstrap: ## One-off per env: create project, link billing, budget alert. BILLING_ACCOUNT=XXXXXX-XXXXXX-XXXXXX ORG_ID=XXXXXXXXXXXX
 	@test -n "$(BILLING_ACCOUNT)" || { echo "set BILLING_ACCOUNT (see: gcloud billing accounts list)"; exit 1; }
 	@test -n "$(ORG_ID)" || { echo "set ORG_ID (see: gcloud organizations list)"; exit 1; }
 	gcloud projects create $(PROJECT_ID) --name="pitwall $(ENV)" --organization=$(ORG_ID)
@@ -64,3 +64,8 @@ apply: init ## Create/update infrastructure for ENV (cost: US$0/month expected)
 
 destroy: init ## Delete every resource Terraform created in ENV (lake data included)
 	$(TF) destroy $(TF_VARS)
+
+gh-vars: init ## Publish ENV's project, WIF provider and service account to the GitHub environment ENV
+	gh variable set PITWALL_PROJECT --env $(ENV) --body "$(PROJECT_ID)"
+	gh variable set PITWALL_WIF_PROVIDER --env $(ENV) --body "$$($(TF) output -raw workload_identity_provider)"
+	gh variable set PITWALL_SERVICE_ACCOUNT --env $(ENV) --body "$$($(TF) output -raw pipeline_service_account)"

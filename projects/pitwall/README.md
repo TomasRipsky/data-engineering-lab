@@ -19,7 +19,7 @@ flowchart LR
 | Warehouse | BigQuery (raw dataset, full reload) | Free tier, load jobs are free — [ADR 0003](docs/decisions/0003-gcp-two-projects-bigquery-only.md), [0004](docs/decisions/0004-full-reload-of-raw-tables.md) |
 | Infrastructure | Terraform + `make bootstrap` | One root, workspace per env, no keys (Workload Identity Federation) |
 | Transformation | dbt (BigQuery) | Tested SQL with stated grains; unit tests pin the racing rules |
-| Orchestration | | |
+| Orchestration | GitHub Actions (cron + manual dispatch) | Free, public runs, WIF auth — [ADR 0006](docs/decisions/0006-github-actions-as-orchestrator.md) |
 
 ## Run it
 
@@ -33,6 +33,24 @@ make load                           # lake → BigQuery raw.openf1_* tables
 make transform                      # dbt build: staging → intermediate → marts, with tests
 PITWALL_LAKE_URI=.lake make ingest ARGS="--meeting 1255"   # offline: local lake
 ```
+
+## CI/CD
+
+| Workflow | When | What |
+|---|---|---|
+| `pitwall-ci` | every PR touching pitwall | lint + tests, `terraform validate`, `dbt build` in throwaway per-run datasets `ci_pr_<n>_<run>_*` (dropped afterwards; their tables also expire after 1 day) |
+| `pitwall-pipeline` | Mondays 06:00 UTC (prod) and on demand | ingest → load → transform; prod runs code from `main` only |
+
+GCP access uses Workload Identity Federation: no keys exist. Each GitHub Environment (`dev`, `prod`)
+holds its project, WIF provider and service account as variables — `make gh-vars ENV=…` republishes
+them after `make apply` (the provider name changes after a destroy/apply cycle).
+
+On-demand runs: **Actions → pitwall-pipeline → Run workflow**, or
+`gh workflow run pitwall-pipeline.yml -f env=prod -f mode=season -f value=2024`
+(`mode=none` reloads and rebuilds models without calling the API).
+
+GitHub disables scheduled workflows after 60 days without repository activity (it can happen in the
+December–February off-season): re-enable it from the Actions tab.
 
 ## F1 in one minute
 
@@ -86,7 +104,7 @@ Known real-race outliers that only warn: red-flag pit stops of up to 22 minutes,
 
 ## Cost & teardown
 
-Per environment: one GCP project with a GCS bucket (MBs), four BigQuery datasets, a service account
+Per environment: one GCP project with a GCS bucket (MBs), five BigQuery datasets (raw, staging, intermediate, marts, audit), a service account
 and a Workload Identity pool. **Expected cost: 0/month** — everything stays in the free tier.
 Guards: a budget alert (warns at 50/90/100 % of 5 EUR) and a 50 GiB/day BigQuery query quota
 (stops runaway queries; the default is 200 TiB/day).
