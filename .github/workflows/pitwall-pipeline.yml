@@ -1,0 +1,74 @@
+name: pitwall-pipeline
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Monday 06:00 UTC: the morning after a race weekend
+  workflow_dispatch:
+    inputs:
+      env:
+        description: Environment
+        type: choice
+        options: [dev, prod]
+        default: dev
+      mode:
+        description: "latest = new races only; meeting/season = (re)ingest one; none = reload + transform only"
+        type: choice
+        options: [latest, meeting, season, none]
+        default: latest
+      value:
+        description: Meeting key (mode=meeting) or year (mode=season)
+        required: false
+        default: ""
+
+concurrency:
+  group: pitwall-pipeline-${{ github.event_name == 'schedule' && 'prod' || inputs.env }}
+  cancel-in-progress: false # never interrupt a run halfway through a load
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: ${{ github.event_name == 'schedule' && 'prod' || inputs.env }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TARGET_ENV: ${{ github.event_name == 'schedule' && 'prod' || inputs.env }}
+      MODE: ${{ github.event_name == 'schedule' && 'latest' || inputs.mode }}
+      VALUE: ${{ inputs.value }}
+    defaults:
+      run:
+        working-directory: projects/pitwall
+    steps:
+      - name: Validate inputs before touching GCP
+        working-directory: .
+        run: |
+          case "$MODE" in
+            latest|none) ;;
+            meeting|season)
+              [[ "$VALUE" =~ ^[0-9]+$ ]] || { echo "::error::value must be a number for mode=$MODE, got '$VALUE'"; exit 1; } ;;
+            *) echo "::error::unknown mode '$MODE'"; exit 1 ;;
+          esac
+      - uses: actions/checkout@v7
+        with:
+          # prod only ever runs released code
+          ref: ${{ env.TARGET_ENV == 'prod' && 'main' || github.ref }}
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.PITWALL_WIF_PROVIDER }}
+          service_account: ${{ vars.PITWALL_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - uses: astral-sh/setup-uv@v10
+      - run: uv sync --locked
+      - name: Ingest
+        if: env.MODE != 'none'
+        run: |
+          case "$MODE" in
+            latest) args="--latest" ;;
+            *) args="--$MODE $VALUE" ;;
+          esac
+          make ingest ENV="$TARGET_ENV" ARGS="$args"
+      - name: Load raw tables
+        run: make load ENV="$TARGET_ENV"
+      - name: Transform and test
+        run: make transform ENV="$TARGET_ENV"
