@@ -132,12 +132,106 @@ Edge decisions:
 
 > **In short.** We ask the API slowly and politely, and retry only when the fault is temporary. Everything that comes back is checked against a list of expected fields and types. Each Grand Prix is saved as a group of files, and a small "ready" file (the marker) is written last — so anyone reading only trusts complete groups, and running it again just overwrites the same files. The lake of files is the memory of what's done; everything after it can be rebuilt from it without calling the API again.
 
+### Loading into BigQuery (`load.py`)
+
+`pitwall load` rebuilds the twelve `raw.openf1_<endpoint>` tables from the lake, **in full, every time**: one BigQuery load job per table, `WRITE_TRUNCATE`, from an explicit list of files built from the success markers. It is the bridge between files (the lake) and tables (the warehouse), and it adds no logic of its own: raw tables mirror the lake exactly.
+
+```
+lake.manifests()                   ← read every marker (85 Grands Prix in dev today)
+   │
+load_plan()  → {"openf1_laps": [gs://…/laps/season=2023/meeting_key=1140/part.parquet, …],
+   │            "openf1_sessions": [gs://…/sessions/season=2023/part.parquet, …], …}
+   │            season files: one per season that has markers · meeting files: one per marker
+   │            that lists that endpoint
+load()  → for each table: bigquery_loader(table, uris)
+   │                          └─ client.load_table_from_uri(uris, "raw.openf1_laps",
+   │                                  source_format=PARQUET, write_disposition=WRITE_TRUNCATE)
+   └─ 12 load jobs, one after the other → rows per table in the log
+```
+
+#### 1. Full reload: throw it all away and rebuild ([ADR 0004](decisions/0004-full-reload-of-raw-tables.md))
+
+Every run replaces each table with *everything* the lake holds, not just the new Grand Prix. It sounds wasteful; at our size it is the best option:
+
+- **Size:** the biggest raw table (`openf1_laps`, 2023 → today) is ~104k rows and ~11 MB. Reloading it takes seconds.
+- **Price:** batch load jobs are **free** in BigQuery (they run on a shared pool of compute), unlike queries (billed by bytes read) and streaming inserts (billed by volume).
+- **Idempotent by construction:** the result depends only on what the lake holds, never on what the table held before. Run it twice, get the same table. An incremental load has to answer "what is new?", and every wrong answer is a duplicate or a gap.
+- **Self-healing:** a re-ingested Grand Prix (upstream correction) or a deleted one is picked up automatically on the next load; no "update" or "delete" logic exists.
+
+**Atomic per table.** BigQuery's own guarantee: truncation and loading "occur as one atomic update upon job completion". While the job runs, readers see the old table; if it fails, the old table stays; only on success is it swapped for the new one. Never a half-loaded table.
+
+**Not atomic across tables.** The twelve jobs run one after another, so for a few seconds `openf1_laps` can be new while `openf1_stints` is still old. Nobody sees it: the only reader of `raw` is dbt, which runs *after* `load` in the same job, and the pipeline's `concurrency` group forbids two runs at once. If job 5 fails, tables 1–4 are new and 6–12 old, `load` fails, dbt never runs, and the next run rebuilds all twelve.
+
+#### 2. An explicit list of files, never a wildcard
+
+BigQuery accepts `gs://bucket/raw/laps/*`, which would be one line. We build the list by hand from the manifests instead:
+
+- A wildcard also matches **unmarked** files: a Grand Prix that crashed mid-write would leak half-written data into the warehouse. The marker only protects readers that check it; the loader checks it by building its list from the manifests.
+- It only lists endpoints that each manifest names (`if endpoint in m["rows"]`): a Grand Prix ingested before an endpoint existed (e.g. `overtakes`, added later) doesn't make a job point at a missing file, which would fail the whole load.
+- Season files (`meetings`, `sessions`) are loaded only for seasons that have at least one marker, and only if the file exists.
+- An empty lake **fails** (`no complete meetings to load`) instead of truncating every table to zero rows.
+
+#### 3. The schema comes from the contract, through Parquet
+
+We never declare a BigQuery schema. Parquet is **self-describing**: each file carries its own schema, and BigQuery reads it. That schema is the pyarrow contract from ingestion, so there is one source of truth for types:
+
+| Contract (pyarrow) | Parquet | BigQuery |
+|---|---|---|
+| `pa.int64()` | INT64 | `INTEGER` |
+| `pa.float64()` | DOUBLE | `FLOAT` |
+| `pa.string()` | UTF8 string | `STRING` |
+| `pa.timestamp("us", tz="UTC")` | TIMESTAMP, adjusted to UTC | `TIMESTAMP` (without `tz` it would land as `DATETIME`, a time with no time zone) |
+
+With `WRITE_TRUNCATE` the table is replaced *including its schema*, so a column added to the contract appears in BigQuery on the next load with no migration. The flip side: a column removed from the contract disappears, and any dbt model using it fails — which is what we want to find out in CI.
+
+#### 4. Code shape: the loader is a function you pass in
+
+```python
+Loader = Callable[[str, list[str]], int]  # (table, uris) -> rows loaded
+
+
+def load(lake: Lake, loader: Loader) -> dict[str, int]: ...
+def bigquery_loader(project, dataset="raw", client=None) -> Loader: ...
+```
+
+- `load` only decides *what* to load; `bigquery_loader` knows *how*. Tests pass a fake loader that records the calls, so the whole plan is tested without GCP. Porting to Snowflake or Redshift means writing one more loader, not touching the plan.
+- `from google.cloud import bigquery` is imported *inside* the function: `pitwall ingest` and the tests never pay for loading the BigQuery library.
+- The CLI refuses `load` against a local lake: BigQuery can only read from `gs://`, not from a laptop.
+
+#### 5. Who is allowed to do it
+
+The pipeline service account has three grants ([`infra/gcp/iam.tf`](../infra/gcp/iam.tf)), split on purpose:
+
+| Grant | Scope | Why |
+|---|---|---|
+| `storage.objectAdmin` | the raw bucket only | read (load) and write (ingest) the lake |
+| `bigquery.dataEditor` | each of the five datasets | replace tables' data |
+| `bigquery.jobUser` | the project | *run* jobs — a load job is a project resource |
+
+"Allowed to run jobs" and "allowed to touch this data" are separate permissions in BigQuery. A job user without data access can run nothing useful; data access without job user can't run a query. Least privilege means granting each at the smallest scope that works. How that account gets credentials with no key file is block 3.
+
+#### Alternatives rejected
+
+- **Incremental load per Grand Prix** (`raw.openf1_laps$<partition>` with a truncate of only that partition): the right tool when a full reload costs real time or money — telemetry in phase 2 (~500k rows per race). For 11 MB it is more moving parts for no gain.
+- **External tables** over the lake (BigQuery reads GCS on every query): no load step at all, but every dbt run re-reads Parquet from GCS (slower, no caching) and the table definition depends on the Hive paths.
+- **Streaming inserts / Storage Write API:** built for rows arriving continuously; billed, and pointless for a weekly batch.
+- **`bq load` in the Makefile:** fewer lines, but the manifest logic (which files, which endpoints) would move into shell.
+
+#### Where else it applies
+
+- Full refresh vs incremental is the same decision as a dbt `table` vs `incremental` materialization (block 4).
+- "Atomic per table, not per dataset" is why multi-table pipelines either run consumers strictly afterwards (us), or use table formats with multi-table transactions, or publish through a swap (write-audit-publish).
+- Separating "run jobs" from "access data" is how every cloud warehouse does IAM (Snowflake warehouses vs database grants, Databricks compute vs Unity Catalog).
+
+> **In short.** Every run, BigQuery throws the raw tables away and rebuilds them from the lake — it's small, free and can't create duplicates. Each table is swapped in one go, so nobody ever sees a half-loaded table. The loader only takes the files listed in the "ready" markers, never "everything in the folder", so a half-written Grand Prix can't sneak in. The column types come straight from the Parquet files, which come from the contract: one definition, used end to end.
+
 ## Local vs production
 
 | | Laptop | Cloud (dev / prod) |
 |---|---|---|
 | Lake | `PITWALL_LAKE_URI=.lake` (local folder) | `gs://pitwall-tr-<env>-raw` |
 | Identity | your `gcloud` user credentials (ADC) | *(block 3)* |
+| `pitwall load` | refused on a local lake (BigQuery reads only `gs://`) | 12 load jobs into `<project>.raw`, seconds each |
 
 ## Where it breaks
 
@@ -147,3 +241,6 @@ Edge decisions:
 | A meeting's files exist in the lake but it never reaches BigQuery | Crash between the first write and the marker | Nothing to clean: the next run overwrites it; the loader ignores unmarked meetings |
 | Warning "dropping columns not in the contract" | OpenF1 added a field | Decide whether we want it; add it to `CONTRACTS` by PR |
 | Run crashes in `time.sleep` with "Invalid value NaN" or a negative value | A `Retry-After` header that is negative or `nan` is passed through unclamped | Clamp the delay to `[0, MAX_DELAY]` in `backoff_delay` |
+| `load` fails with "the lake has no complete meetings to load" | No markers in the lake (wrong `PITWALL_LAKE_URI`/env, or a fresh environment) | Check `gcloud storage ls gs://pitwall-tr-<env>-raw/raw/_success/`; ingest first |
+| `load` fails on one table; some raw tables are new, others old | A load job failed midway through the twelve | Nothing downstream ran (dbt comes after); fix the cause and re-run `load` — it rebuilds everything |
+| A dbt model fails after a load with "Unrecognized name" | A column was removed from the contract; `WRITE_TRUNCATE` replaced the table schema | Intended: restore the column or update the model, in the same PR |
