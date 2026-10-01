@@ -6,6 +6,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Changed
+- **External-data checks are verified against the oldest data loaded, and each clause of a behaviour gets a test that bites** (`lab/conventions.md`): #48 proved "no false warnings" on one season's recordings only, and its first test passed with the guard removed.
 - **Review findings become issues the same day** (`agent/tutoring.md`): the Retry-After bug (#44) sat only in a vault note.
 - **`ship` is mandatory for every PR into `dev`** (CLAUDE.md), even when the prompt dictates the steps: in #44 the manual flow missed its pending-CI rule.
 - **`ship`: the issue-link check is a gate inside the merge step.** Right after PR creation GitHub may not have computed the link yet (false "not linked"), and an advisory STOP in an earlier step was ignored by a scripted run during the v1.0.0 release.
