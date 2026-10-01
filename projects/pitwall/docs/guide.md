@@ -225,42 +225,159 @@ The pipeline service account has three grants ([`infra/gcp/iam.tf`](../infra/gcp
 
 > **In short.** Every run, BigQuery throws the raw tables away and rebuilds them from the lake — it's small, free and can't create duplicates. Each table is swapped in one go, so nobody ever sees a half-loaded table. The loader only takes the files listed in the "ready" markers, never "everything in the folder", so a half-written Grand Prix can't sneak in. The column types come straight from the Parquet files, which come from the contract: one definition, used end to end.
 
-### Python tests and recorded fixtures (`tests/`)
+### Python tests and recorded API answers (`tests/`)
 
-**If you've never written a test:** a test is a small function that runs our code with a known input and checks the answer, e.g. `assert season_file("laps", 2025) == "raw/laps/season=2025/part.parquet"`. `pytest` finds every function named `test_*` in files named `test_*.py`, runs them all, and reports which passed and which failed (showing expected vs actual). Tests are manual checks written down once so a machine can repeat them on every change. The catch for pitwall: most of our code talks to the OpenF1 API, and tests can't call the real API every time (slow, 30 requests/min, its data changes). So the tests give the code a **fake API** that answers with real responses saved earlier — that's what the JSON files are.
+This section starts from zero: no previous experience with tests or pytest is assumed.
 
-65 pytest tests cover ingestion, the lake, the loader, the CLI and the site export. They run in about 3 seconds, **without network and without GCP**, which is what lets CI run them on every PR.
+#### 1. What a test is
 
-**Two meanings of "fixture".** In pytest, a *fixture* is a function decorated with `@pytest.fixture` that prepares something a test needs; pytest injects it by parameter name (`def test_x(lake): …`). [`conftest.py`](../tests/conftest.py) is where shared ones live, discovered automatically. Separately, `tests/fixtures/openf1/` holds **recorded data**: real OpenF1 answers saved as JSON. The two meet in the `fixture_client` fixture, which serves that data.
+Code changes all the time, and every change can break something that worked yesterday, often far from the line you edited. Checking everything by hand after each change doesn't happen in practice. **A test is a manual check written down once as code, so a machine can repeat it forever.** Like a car factory's test bench: the same checks for every car, in minutes, under controlled conditions.
 
-**What the JSON files are.** Twenty-one real API responses for one Grand Prix — the 2025 Chinese GP (meeting 1255: Sprint 9993 + Race 9998) — one file per request the ingestion makes, named after it:
+The smallest example from pitwall. This function says where a season file lives in the lake:
 
-```
-laps__session_key=9998.json      ← answer to GET /laps?session_key=9998
-meetings__year=2025.json         ← answer to GET /meetings?year=2025
-starting_grid__meeting_key=1255.json
-```
-
-**How they replace the API** — record once, replay forever:
-
-```
-record (rarely, by hand)                           replay (every test run)
-tests/record_fixtures.py                           OpenF1Client(http=httpx.Client(transport=MockTransport(handler)))
-  └─ real OpenF1Client → api.openf1.org              └─ every request → _fixture_handler(request)
-  └─ keep only drivers 4 and 81 (the McLarens)            builds "<endpoint>__<sorted params>.json"
-  └─ write <endpoint>__<params>.json                      file exists → 200 + its content
-     (no rows → no file)                                  no file     → 404 {"detail": "No results found."}
+```python
+def season_file(endpoint, season):
+    return f"raw/{endpoint}/season={season}/part.parquet"
 ```
 
-- **The production code doesn't know.** `OpenF1Client` accepts an `httpx.Client`; tests pass one whose *transport* is `httpx.MockTransport`. Everything above the transport (URL building, params, status handling, JSON parsing, rate limiter, retries) is the real code; only the network is replaced. `min_interval=0` and a fake `sleep` remove the waiting.
-- **A missing file means "no data".** The handler answers exactly what OpenF1 answers for an empty result. Real case in the fixtures: the Sprint (9993) has no `pit__session_key=9993.json`, so the ingestion's "empty optional endpoint" path is exercised with genuine data.
-- **Trimmed to two drivers**: 248 KB instead of several MB, small enough to commit and read in a diff, while keeping real shapes (nulls, mixed types like `gap_to_leader`, real timestamps).
-- **Deterministic time.** Tests pass `NOW = datetime(2025, 4, 1)` instead of reading the clock, so "has this race finished?" always has the same answer.
-- **Hand-built responses** cover what real data rarely shows: `make_client(handler)` with a handler that returns 429s, 503s, timeouts or a non-list body tests the retry policy (`test_client.py`).
+and this is a test for it:
 
-**What this buys:** the integration tests run `ingest_one` end to end — API → contracts → Parquet → marker → loader plan — on real data, offline, in milliseconds, never touching the rate limit, never flaking because OpenF1 is slow. The trade-off: **recordings go stale** if OpenF1 changes. That drift is caught by the contract in real runs (an unknown field warns, a missing required field fails), and `uv run python tests/record_fixtures.py` re-records them.
+```python
+def test_season_path():
+    assert season_file("laps", 2025) == "raw/laps/season=2025/part.parquet"
+```
 
-> **In short.** The JSON files are real answers from the F1 API for one race, saved once and replayed in every test. The tests plug a fake network into the real client: each request is answered from the matching file, or with "no results" if there isn't one. So the whole ingestion runs on real data in three seconds, without internet, without waiting for the rate limit and without a cloud account.
+`assert` means "this must be true; if not, stop and report it". The test feeds the function a known input and compares the answer with the expected one.
+
+#### 2. What pytest is
+
+**pytest** is the program that runs tests. It finds every file named `test_*.py`, runs every function in them named `test_*`, and reports the result. A passing test prints a dot; a failing one prints what was expected and what came back:
+
+```
+>   assert season_file("laps", 2025) == "raw/laps/2025/part.parquet"
+E     - raw/laps/2025/part.parquet          ← what the test expected
+E     + raw/laps/season=2025/part.parquet   ← what the function returned
+1 failed, 1 passed
+```
+
+Run them with `make test` (it calls `uv run pytest`). In CI they run on every pull request, and a red test blocks the merge.
+
+#### 3. The problem: most of pitwall talks to the internet
+
+`season_file` is easy to test because it depends on nothing outside. But ingestion asks the **OpenF1 API** for data over the internet. Calling the real API from tests would be:
+- **slow** — 30 requests per minute, and there are dozens of tests;
+- **flaky** — if OpenF1 is down, tests fail although our code is fine;
+- **unpredictable** — the API's data can change, so the test can't know what to expect;
+- often **paid or authenticated** (not OpenF1, but most APIs).
+
+The real-world answer is a **stand-in**: banks test payment code against a *sandbox* that answers like the real system without moving money. pitwall's stand-in is a fake API that answers with **real responses recorded earlier**. Those recordings are the JSON files.
+
+#### 4. The recordings: `tests/fixtures/openf1/*.json`
+
+Twenty-one real OpenF1 answers for **one** Grand Prix, the 2025 Chinese GP (meeting `1255`, Sprint `9993` and Race `9998`), trimmed to two drivers (4 Norris and 81 Piastri) to keep them small (≈250 KB). Each file is named after the request that produced it:
+
+| Request the ingestion makes | File holding the answer |
+|---|---|
+| `GET /meetings?year=2025` | `meetings__year=2025.json` |
+| `GET /laps?session_key=9998` | `laps__session_key=9998.json` |
+| `GET /pit?session_key=9998` | `pit__session_key=9998.json` |
+| `GET /starting_grid?meeting_key=1255` | `starting_grid__meeting_key=1255.json` |
+
+Name rule: `<endpoint>__<param>=<value>[&<param>=<value>…].json`, parameters sorted alphabetically. Inside, exactly what OpenF1 returned, e.g. the two real pit stops of the race:
+
+```json
+[
+ {"driver_number": 81, "lap_number": 14, "lane_duration": 23.938, "stop_duration": 3.8, ...},
+ {"driver_number": 4,  "lap_number": 15, "lane_duration": 22.213, "stop_duration": 2.2, ...}
+]
+```
+
+**Why this race:** it has both a Sprint and a Race (both session kinds in one meeting), real pit stops and race-control messages, and one useful gap — **no pit stops recorded in the Sprint**, so there is no `pit__session_key=9993.json`. That missing file tests the "endpoint with no data" path with genuine data.
+
+#### 5. Record once, replay in every test
+
+```
+RECORD (rarely, by hand: tests/record_fixtures.py)
+  real OpenF1Client → api.openf1.org (22 requests, ~45 s with the rate limit)
+  → keep only rows of meeting 1255 and drivers 4 / 81
+  → write <endpoint>__<params>.json   (no rows → no file)
+
+REPLAY (every test run: tests/conftest.py)
+  the ingestion asks:  "GET /pit?session_key=9998"
+  the fake API looks for pit__session_key=9998.json
+     found     → answers 200 with its content, as OpenF1 would
+     not found → answers 404 {"detail": "No results found."}, exactly as OpenF1 does
+```
+
+How it plugs in without changing production code: `OpenF1Client` accepts the HTTP client it uses as a parameter. Tests pass one built with `httpx.MockTransport(handler)`: the *transport* is the bottom layer that would send bytes over the network, and here it calls our `handler` instead. Everything above it — building URLs, the rate limiter, retries, the 404 handling, parsing JSON — is the real code. Tests also set the limiter's interval to 0 and replace `sleep` with a no-op, so nothing waits.
+
+**The two meanings of "fixture".** The folder `fixtures/` holds *data* (the recordings). In pytest, a *fixture* is a function marked `@pytest.fixture` that *prepares* something a test needs; a test asks for it by writing its name as a parameter (`def test_x(lake):`), and pytest builds it and passes it in. [`conftest.py`](../tests/conftest.py) defines the shared ones, and pytest finds that file automatically:
+
+| pytest fixture | Gives the test |
+|---|---|
+| `fixture_client` | an `OpenF1Client` whose network is the fake API serving the recordings |
+| `openf1_fixtures` | the replay function itself, to wrap it (e.g. pretend laps aren't published yet) |
+| `make_client` | a builder for clients with a hand-written fake network (429s, 503s, timeouts, bad bodies) |
+| `lake` (in several test files) | an empty lake in a temporary folder, deleted after the test |
+
+**Time is frozen too.** Tests pass `NOW = 2025-04-01` instead of reading the clock, so "has this race finished?" always gets the same answer, today or in five years.
+
+#### 6. What each test file checks
+
+| File | Checks | Uses the recordings? |
+|---|---|---|
+| `test_client.py` | rate limiter spacing, backoff, retries on 429/5xx/network errors, 404 "No results" = empty, other 404s fail | no — hand-written answers |
+| `test_contracts.py` | casting rules, required fields, unknown fields dropped, **every recording matches its contract exactly** | yes (the last check) |
+| `test_lake.py` | path names, Parquet round trip, markers, spaces in paths, never creating buckets | no |
+| `test_ingest.py` | `--meeting`, `--season`, `--latest` end to end; idempotency; crash mid-write leaves no marker; data not published yet; previous season in January; stale meetings fail loudly | yes |
+| `test_load.py` | the load plan only uses marked meetings and manifest endpoints; WRITE_TRUNCATE Parquet config | yes, plus a fake BigQuery |
+| `test_cli.py` | command-line arguments, required environment variables, errors | yes |
+| `test_season.py` | which sessions count as races, when a meeting counts as finished | no — hand-built sessions |
+| `test_site_data.py` | site export queries read only marts, 64→32-bit integers, fuel-corrected curve, never publish an empty site | no — fake BigQuery |
+| `test_smoke.py` | the package imports | no |
+
+86 tests in total (21 of them are the per-recording contract check), about 3 seconds, no internet and no GCP.
+
+#### 7. When OpenF1 changes: what happens and what to do
+
+The recordings are a photo of the API on the day they were made (last re-recorded and verified identical on 2026-10-01). If OpenF1 changes, the photo goes stale: **tests stay green with the old answers**. What catches the change is the real pipeline, through the contract:
+
+| OpenF1 change | Real runs (prod/dev pipeline) | Tests, after re-recording |
+|---|---|---|
+| **New field** (e.g. `laps.tyre_temp`) | warning "dropping columns not in the contract"; field ignored | red: "new fields from OpenF1" |
+| **Field renamed** (e.g. `lane_duration` → `lane_time`) | warning for the new name, and the old column becomes **silently empty** (if it was optional); dbt null-rate tests may warn | red: new field *and* "contract fields OpenF1 no longer sends" |
+| **Field removed** | required → run **fails** (`ContractError`); optional → column silently empty | red: "contract fields OpenF1 no longer sends" |
+| **Type changed** (e.g. `"P1"` instead of `1`) | run **fails** (`ContractError: cannot cast`) | red, in the ingestion tests |
+| **"No results" answer changed** | run fails on the unexpected 404 (or works, if it becomes `200 []`) | depends: update `NO_RESULTS` in `client.py` and the fake API |
+
+So the signals to watch are a **failed pipeline run** (GitHub emails it) or a **contract warning in the run logs**. Then:
+
+1. **Open an issue and a branch** as usual.
+2. **Re-record:** from `projects/pitwall`, run `uv run python tests/record_fixtures.py`. It deletes the old recordings, calls the real API (22 requests, ~45 s, no key needed) and writes the new ones.
+3. **See what changed:** `git diff tests/fixtures/` — the diff *is* the API change, field by field.
+4. **Run the tests:** `make test`. `test_recorded_responses_match_the_contract_exactly` names each new, renamed or missing field per endpoint.
+5. **Decide, field by field:**
+   - want it → add it to `CONTRACTS` in `src/pitwall/contracts.py` with its type, then to the staging model and its YAML description if a model will use it;
+   - don't want it → add it to that contract's `ignored` set (silences the warning, documents the choice);
+   - renamed → change the contract *and* every staging model that reads it (`transform/models/staging/`);
+   - removed → remove it from the contract and from the models; if it was required, rethink what depends on it.
+6. **Green tests, then a dbt build in dev** (`make transform`) to catch SQL that used the old name.
+7. **Commit recordings, contract and models in the same PR**, so reviewers see the API change and our answer together.
+8. **Re-ingest if needed:** a new field only exists in data ingested *after* the contract change. Backfill with `--season` per year (≈15 min each) or the pipeline's `mode=season`.
+
+If something goes wrong mid-recording (network, rate limit), `git checkout tests/fixtures/` restores the previous recordings.
+
+**To record a different race or more drivers,** edit the constants at the top of `record_fixtures.py` (`MEETING`, `YEAR`, `SESSIONS`, `DRIVERS`) — and expect to update the tests that assert on them (`session_keys == [9993, 9998]`, drivers `{4, 81}`, meeting `1255`).
+
+#### 8. Questions that usually come up
+
+- **Isn't it cheating to test against recorded data?** It tests *our* code against *real* answers. What it can't test is whether OpenF1 still answers the same way — that's the contract's job in real runs, and re-recording's job in tests.
+- **Why not record the whole race (all 20 drivers)?** Several MB of JSON nobody can review in a diff, for no extra coverage: two drivers exercise every code path.
+- **Why are retries tested with hand-written answers?** A recording almost never contains a 429 or a 503. Rare failures have to be staged on purpose.
+- **Do the dbt tests use these files?** No. dbt's unit tests use their own hand-made rows (block 4–5), and dbt's data tests check the real tables in BigQuery.
+- **Can the recordings leak secrets?** OpenF1 needs no key and the files contain only public timing data. With an authenticated API, scrub tokens and personal data before committing recordings.
+
+> **In short.** A test is a check written once that a machine repeats on every change; pytest runs them and says which fail. Most of pitwall talks to the F1 API, so tests don't call it: they use real answers for one race, recorded once into JSON files, and a fake API that hands them back. If OpenF1 changes its data, the live pipeline warns or fails first; then one command re-records the answers, the git diff shows exactly what changed, a test names every new or missing field, and we update the contract and the models in the same pull request.
 
 ### Infrastructure (`infra/gcp/`, `Makefile`)
 
@@ -633,3 +750,4 @@ Checks run at five levels; each catches what the others can't:
 | A mart test fails but the mart in BigQuery already shows the new data | dbt builds a model before testing it; only upstream failures keep the old table | The site is protected (export runs only after a green build). Fix and re-run; consider write-audit-publish if people query marts directly |
 | Degradation looks negative or zero on hard tyres | Fuel burn makes cars ~0.03–0.06 s/lap faster, hiding wear (and drying tracks on intermediates) | Expected: read the fuel-corrected curve on the site; the raw slope is documented as biased |
 | Sprint `grid_position` is null for a new season | OpenF1 renamed the sprint qualifying session again (it was "Sprint Shootout" in 2023) | Add the new name to the `case` in `fct_session_results` and to its unit test |
+| Tests green but the pipeline warns "dropping columns not in the contract" | OpenF1 added or renamed a field; the recordings are older than the change | Follow "When OpenF1 changes" in the tests section: re-record, read the diff, decide per field |
