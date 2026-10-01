@@ -28,6 +28,8 @@ Releases and PRs into `main` need Tomas's explicit OK.
 
 - `uv` for environments and dependencies (`uv.lock` committed per project), `ruff` for lint and format, `pytest` for tests.
 - Python ≥ 3.12. Each project has its own `pyproject.toml`; there is no root workspace (lab ADR 0001).
+- One test per clause of a behaviour (*every* vs *some*, empty input, required vs optional), each shown to bite: break the guarded line once and watch that test go red.
+- A check on the shape of external data is verified against the oldest data the pipeline loads (one live request per old season or partition), not only against the recorded fixtures.
 
 ## SQL
 
