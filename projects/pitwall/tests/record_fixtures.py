@@ -32,6 +32,8 @@ def keep(row: dict) -> bool:
 
 def main() -> None:
     FIXTURES.mkdir(parents=True, exist_ok=True)
+    for stale in FIXTURES.glob("*.json"):  # an endpoint that is empty now must lose its file
+        stale.unlink()
     client = OpenF1Client()
     for endpoint, params in REQUESTS:
         rows = [row for row in client.get(endpoint, **params) if keep(row)]

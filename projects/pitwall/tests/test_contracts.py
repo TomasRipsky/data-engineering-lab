@@ -1,6 +1,8 @@
+import json
 from datetime import UTC, datetime
 
 import pytest
+from conftest import FIXTURES
 
 from pitwall.contracts import (
     CONTRACTS,
@@ -101,3 +103,17 @@ def test_empty_response_gives_empty_table_with_schema():
     table = to_table("pit", [], NOW)
     assert table.num_rows == 0
     assert table.schema == CONTRACTS["pit"].schema
+
+
+@pytest.mark.parametrize("path", sorted(FIXTURES.glob("*.json")), ids=lambda p: p.name)
+def test_recorded_responses_match_the_contract_exactly(path):
+    """After re-recording, a new, renamed or removed OpenF1 field turns this red.
+
+    At runtime a renamed optional field only warns and its column silently becomes null, so this
+    is where an API change has to be decided: add the field, ignore it, or update the contract.
+    """
+    endpoint = path.name.split("__")[0]
+    contract = CONTRACTS[endpoint]
+    sent = set().union(*json.loads(path.read_text()))
+    assert sent - contract.fields.keys() - contract.ignored == set(), "new fields from OpenF1"
+    assert contract.fields.keys() - sent == set(), "contract fields OpenF1 no longer sends"
