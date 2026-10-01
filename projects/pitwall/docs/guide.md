@@ -227,6 +227,8 @@ The pipeline service account has three grants ([`infra/gcp/iam.tf`](../infra/gcp
 
 ### Python tests and recorded fixtures (`tests/`)
 
+**If you've never written a test:** a test is a small function that runs our code with a known input and checks the answer, e.g. `assert season_file("laps", 2025) == "raw/laps/season=2025/part.parquet"`. `pytest` finds every function named `test_*` in files named `test_*.py`, runs them all, and reports which passed and which failed (showing expected vs actual). Tests are manual checks written down once so a machine can repeat them on every change. The catch for pitwall: most of our code talks to the OpenF1 API, and tests can't call the real API every time (slow, 30 requests/min, its data changes). So the tests give the code a **fake API** that answers with real responses saved earlier — that's what the JSON files are.
+
 65 pytest tests cover ingestion, the lake, the loader, the CLI and the site export. They run in about 3 seconds, **without network and without GCP**, which is what lets CI run them on every PR.
 
 **Two meanings of "fixture".** In pytest, a *fixture* is a function decorated with `@pytest.fixture` that prepares something a test needs; pytest injects it by parameter name (`def test_x(lake): …`). [`conftest.py`](../tests/conftest.py) is where shared ones live, discovered automatically. Separately, `tests/fixtures/openf1/` holds **recorded data**: real OpenF1 answers saved as JSON. The two meet in the `fixture_client` fixture, which serves that data.
