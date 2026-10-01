@@ -333,6 +333,143 @@ Separate projects, not prefixes in one project, because a project is GCP's isola
 
 > **In short.** A one-off script creates each GCP project with its budget alarm; Terraform builds everything inside it from code and can tear it all down and rebuild it. GitHub never holds a password for GCP: each run shows a signed ID card from GitHub, GCP checks it against a strict guest list (this repo, these workflows, and for prod only the prod environment on dev/main) and hands out a key that expires in an hour. Two brakes keep it free: a budget that emails when money is spent, and a daily query limit that simply refuses to spend more.
 
+### Transformation I: dbt project, staging and intermediate (`transform/`)
+
+dbt turns a folder of `select` statements into a tested pipeline inside BigQuery. pitwall's models flow in three layers: **staging** cleans each raw table one to one, **intermediate** applies the racing rules (when was the Safety Car out? which tyre was each lap on? what position was the car in?), and **marts** answer questions (next block). This block covers the project setup and the first two layers.
+
+```
+raw.openf1_* (12 tables, from load)
+   │  sources.yml: declares them + source tests
+staging.stg_openf1__* (10 views)        one per raw table: dedupe, rename, type, no logic
+   │
+intermediate.int_neutralised_laps (view)    race-control messages → laps under SC / VSC / red flag
+intermediate.int_laps_enriched (view)       every lap + tyre + pit flags + neutralisation
+   │                                        + position at the end of the lap + is_clean_lap
+marts.* (tables, next block)
+```
+
+#### 1. How dbt works inside
+
+- **A model is a `select`.** dbt wraps it in DDL according to its *materialization*: `view` → `create or replace view … as <select>`; `table` → `create or replace table … as <select>`. You never write `create` or `insert`.
+- **`ref()` and `source()` build the graph.** `{{ ref('stg_openf1__laps') }}` does two things: it compiles to the full table name (`pitwall-tr-dev.staging.stg_openf1__laps`), and it records an edge "this model depends on that one". From all the edges dbt builds a DAG and runs models in dependency order, up to `threads: 4` at once.
+- **Compile, then execute.** dbt renders Jinja (`{{ }}`, `{% %}`) into plain SQL (visible in `target/compiled/`), then sends each statement to BigQuery as a query job. dbt itself moves no data: all the work happens in the warehouse.
+- **`dbt build`** runs, in DAG order, for each node: unit tests → the model → its data tests. If a test with severity `error` fails, everything downstream of it is **skipped**: a broken staging model never feeds the marts, and the dashboard keeps its last good version.
+
+#### 2. Project configuration
+
+- **Materializations by layer** ([`dbt_project.yml`](../transform/dbt_project.yml)): staging and intermediate are **views**, marts are **tables**. A view stores nothing and is always current, but is recomputed every time it is read; a table is computed once per build and read many times. Marts are what `site-export` reads, so they are tables; the layers in between are read once per build by the next layer, so views cost nothing extra and never go stale.
+- **One dataset per layer** with [`generate_schema_name`](../transform/macros/generate_schema_name.sql). dbt's default would name the dataset `<target schema>_<custom schema>` (e.g. `staging_marts`). The override gives clean names in dev/prod (`staging`, `intermediate`, `marts`, `audit`, all created by Terraform), and in CI prefixes every layer with the per-PR name (`ci_pr_12_marts`), so the same code builds an isolated copy per PR.
+- **Profile** ([`profiles.yml.example`](../transform/profiles.yml.example)): `method: oauth` means "use ADC" — your `gcloud` login on the laptop, the WIF token in Actions; no key file. `maximum_bytes_billed: 1000000000` makes BigQuery reject any single query that would bill more than 1 GB, *before* running it: a third cost guard, after the budget and the daily quota, at query level. `job_execution_timeout_seconds: 300` kills a runaway query.
+- **Sources** ([`sources.yml`](../transform/models/sources.yml)) declare the raw tables (project from `PITWALL_BQ_PROJECT`, dataset `raw`) and carry **source tests**: data quality checked at the door, before any model reads it (details in block 5).
+- **Tests store their failures** (`+store_failures: true`, `+schema: audit`): every failing row of every test lands in a table in `audit`, so a failure is something you can query, not just a red line in a log.
+- **Doc blocks** ([`docs.md`](../transform/models/docs.md)): a shared column (`session_key`, `compound`, `neutralisation`) is explained once in plain language and reused everywhere with `{{ doc('…') }}`. Every model's description starts with its grain.
+
+#### 3. Staging: one model per raw table, no business logic
+
+Every staging model has the same shape ([example](../transform/models/staging/stg_openf1__laps.sql)):
+
+```sql
+-- grain: one row per lap of one driver in one session
+with source as (
+    select * from {{ source('openf1', 'openf1_laps') }}
+),
+
+deduplicated as (
+    select * from source
+    where true                       -- BigQuery only allows QUALIFY next to WHERE/GROUP BY/HAVING
+    qualify row_number() over (
+        partition by session_key, driver_number, lap_number   -- the natural key = the grain
+        order by _ingested_at desc                            -- latest download wins
+    ) = 1
+)
+
+select
+    session_key, meeting_key, driver_number, lap_number,
+    date_start as started_at,          -- names say what they are
+    lap_duration as lap_time_s,        -- and their unit
+    ...
+    coalesce(is_pit_out_lap, false) as is_pit_out_lap   -- null booleans become false
+from deduplicated
+```
+
+- **Deduplicate on the natural key.** Ingestion is idempotent, so why dedupe? Because staging must *guarantee* its grain whatever the source does. It isn't theoretical: in dev, `raw.openf1_race_control` has 10,289 rows and staging 10,281 — OpenF1 itself sends the same message twice. `QUALIFY` filters on a window function's result, the way `HAVING` filters on an aggregate; `row_number() … = 1` keeps exactly one row per key.
+- **Rename for meaning and units:** `date` → `recorded_at`, `lap_duration` → `lap_time_s`, `position` → `finish_position` / `grid_position`. A column name that carries its unit prevents the classic seconds-vs-milliseconds bug.
+- **Normalise, don't interpret:** `upper(compound)` with `UNKNOWN` for nulls; `'#' || team_colour` so the site can use it directly; `coalesce(lane_duration, pit_duration)` takes the pit-lane time from whichever field is filled (both are, today; the fallback is defensive).
+- **Flag known defects instead of dropping them:** stints whose `lap_start > lap_end` (a source defect) are kept with `has_valid_lap_range = false`; the mart decides to exclude them. Staging never throws data away silently.
+- **Rename to prevent wrong joins:** the starting grid is attached by OpenF1 to the *qualifying* session that set it, so staging renames its key to `qualifying_session_key`. A careless `join … using (session_key)` with a race simply can't happen.
+- **Only what is used:** `weather` and `overtakes` stay as sources without staging models until a page needs them, and columns OpenF1 never fills are not carried over.
+
+#### 4. `int_neutralised_laps`: from messages to laps under Safety Car
+
+**The problem.** Race control doesn't publish "laps 2–5 were under Safety Car". It publishes **events**: "SAFETY CAR DEPLOYED" on lap 2, "SAFETY CAR IN THIS LAP" on lap 5. We need **one row per lap** that was neutralised, because laps under SC/VSC say nothing about tyre wear (everyone drives slowly) and make pit stops cheaper. A real example from dev, the 2025 São Paulo Grand Prix:
+
+| Lap | Message | → Result |
+|---|---|---|
+| 2 | SAFETY CAR DEPLOYED | laps 2, 3, 4, 5 = `SC` |
+| 5 | SAFETY CAR IN THIS LAP | |
+| 7 | VIRTUAL SAFETY CAR DEPLOYED | laps 7, 8 = `VSC` |
+| 8 | VIRTUAL SAFETY CAR ENDING | |
+
+**How the SQL does it** ([model](../transform/models/intermediate/int_neutralised_laps.sql)), CTE by CTE:
+1. `messages` — keep SafetyCar messages and red flags; classify each as a *start* (`SC`/`VSC` deployed), an *end* (SC in this lap / VSC ending) or a red flag.
+2. `starts`, `ends` — split them.
+3. `interruptions` + `next_interruption` — for each start, the **first** thing after it that interrupts a period: a red flag or a new deployment (`qualify row_number() … order by interruptions.recorded_at) = 1` picks "the next one").
+4. `periods` — each start's last lap is, in order of preference (`coalesce`): the first matching end message *before* the next interruption; otherwise the interruption (a red-flag lap still counts, a new deployment's lap belongs to the new period); otherwise the session's last lap.
+5. `period_laps` — expand each interval into one row per lap: `cross join unnest(generate_array(first_lap, last_lap))` turns `(2, 5)` into 2, 3, 4, 5.
+6. Add every red-flag lap as `RED`, and `union distinct`.
+
+**Why the edge rules exist** — each one is a real race and a unit test in [`_intermediate.yml`](../transform/models/intermediate/_intermediate.yml):
+- A period with **no end message** (it happens) would otherwise run to the end of the race and mark 20 green laps as neutralised. It stops before the next deployment, or at the last lap.
+- A **VSC upgraded to a full SC** has no "VSC ENDING": the VSC stops the lap before the SC starts.
+- **Brazil Sprint 2025:** SC, then a red flag, then a standing restart with no "SC in" message. The red flag closes the SC period.
+
+This shape — pair start/end events into intervals, then expand intervals into rows of the grain you need — is the same as building user sessions from clicks, machine downtime from status events, or SLA windows from tickets.
+
+#### 5. `int_laps_enriched`: every lap with its full context
+
+The model everything downstream reads ([model](../transform/models/intermediate/int_laps_enriched.sql)). Grain: one lap of one driver in one session. Each lap gets:
+
+- **Its tyres** — join to the stint whose range contains the lap (`lap_number between first_lap and last_lap`). `tyre_age_laps = tyre_age_at_start + (lap_number − first_lap)`: a set can start used (from qualifying), so age doesn't start at 0. If the source has overlapping stints, the `qualify` keeps the later one so a lap is never duplicated (a fan-out join, caught by the grain test).
+- **Pit flags** — `is_pit_in_lap` if the pit table has that lap (the driver entered the pits at the end of it); `is_pit_out_lap` from the source (the lap started in the pit lane).
+- **Neutralisation** — one value per lap even when several apply: `RED` outranks `SC`, which outranks `VSC`.
+- **Position at the end of the lap: an as-of join.** `position` is not one row per lap: it's a row *each time a car's position changes*. To know the position at the end of lap 12, take **the latest change recorded at or before the moment lap 12 ended**:
+
+  ```sql
+  inner join positions
+      on positions.driver_number = timed.driver_number
+      and positions.recorded_at <= timed.ended_at          -- everything up to that moment
+  qualify row_number() over (
+      partition by timed.session_key, timed.driver_number, timed.lap_number
+      order by positions.recorded_at desc                 -- the most recent of those
+  ) = 1
+  ```
+
+  `ended_at` is `started_at + lap_time_s`, or the next lap's start when the time is missing (`lead()`). This "value as of a moment" join is one of the most useful patterns in data engineering (prices at trade time, a customer's plan at invoice time, features at prediction time).
+- **`is_clean_lap`** — whether the lap says something about tyre wear. Each condition removes a known distortion:
+
+  | Condition | Removes |
+  |---|---|
+  | `lap_number > 1` | the standing start (slow, chaotic) |
+  | `lap_time_s is not null` | timing gaps |
+  | `not is_pit_in_lap and not is_pit_out_lap` | laps that include driving through the pit lane |
+  | `neutralisation is null` | Safety Car / VSC / red-flag laps |
+  | `lap_time_s <= 1.2 × session median` | damage, traffic chaos, laps around a red flag |
+
+  The median (`percentile_cont(…, 0.5) over (partition by session_key)`) rather than the mean, because the slow laps it's meant to catch would drag a mean up. In dev, 88,872 of 103,549 laps (86 %) are clean.
+
+#### 6. Unit tests: pinning the racing rules
+
+dbt **unit tests** (YAML, dbt ≥ 1.8) feed a model hand-made input rows instead of real tables and compare the output with expected rows. dbt replaces each `ref()` with a CTE of literal values, so the test runs in BigQuery but reads no data. pitwall has four for the intermediate layer, each a race situation written as data: SC + VSC pairing, a period without an end, red flag and VSC→SC, and a six-lap stint covering tyre age, in/out laps, VSC, a damage lap and positions. Real data can't test this: next season may have no VSC-to-SC upgrade at all, and the rule must still be right when one happens.
+
+#### Alternatives rejected
+
+- **Logic in Python** (pandas in the extractor): it would run outside the warehouse, untested by dbt, and every rule change would mean re-ingesting.
+- **One big query per mart:** no reuse; `int_laps_enriched` feeds four marts.
+- **Intermediate as tables:** faster to read, but storage and a rebuild step for something only the next layer reads.
+- **SQLMesh** (column-level lineage, virtual environments): technically strong, but dbt is the market standard (lab rule).
+
+> **In short.** dbt runs our SQL files in the right order inside BigQuery and tests them on every build. Staging just cleans each raw table: one row per thing, clear names with units, no duplicates, nothing interpreted. The intermediate layer holds the racing rules: it turns "Safety Car deployed / in this lap" messages into a list of slow laps, and gives every lap its tyre, its age, its pit flags, its position at the moment it ended, and a verdict on whether it's a "clean" lap worth using to measure tyre wear. The tricky rules are pinned with small hand-made test races, so they stay right even in seasons when those situations never happen.
+
 ## Local vs production
 
 | | Laptop | Cloud (dev / prod) |
@@ -341,6 +478,7 @@ Separate projects, not prefixes in one project, because a project is GCP's isola
 | Identity | your `gcloud` user credentials (ADC: `gcloud auth application-default login`) | `pitwall-pipeline` service account through WIF, a token that lasts ~1 h |
 | Environment choice | `ENV=dev` (default) or `ENV=prod` on any `make` target | the workflow's GitHub Environment (`dev` / `prod`) and its variables |
 | Terraform | only from the laptop; local state per workspace | CI runs `terraform fmt` and `validate`, never `apply` |
+| dbt | `make transform` → `dbt build --target dev`, your ADC | same command with `--target prod` (pipeline) or `--target ci` (per-PR datasets) |
 | `pitwall load` | refused on a local lake (BigQuery reads only `gs://`) | 12 load jobs into `<project>.raw`, seconds each |
 
 ## Where it breaks
@@ -359,3 +497,6 @@ Separate projects, not prefixes in one project, because a project is GCP's isola
 | Workflow fails at `auth` after a destroy → apply | The WIF pool got a new random suffix; GitHub still holds the old provider name | `make gh-vars ENV=<env>` |
 | Terraform wants to create resources that already exist | The local state is lost or a different workspace is selected | `terraform workspace show`; if lost, `terraform import` or destroy the project and re-apply (the data is regenerable) |
 | Budget creation fails in bootstrap | The budget currency differs from the billing account's (EUR) | Use the account's currency: `BUDGET_AMOUNT` is in EUR |
+| A mart test fails with duplicate keys after a source change | A fan-out join: a lap matched two stints (overlapping ranges) or two positions | Query the failing rows in `audit`; fix the join's `qualify`/condition, not the test |
+| Green laps show as `SC` for the rest of a race | A Safety Car period without an end message ran on | Check `stg_openf1__race_control` for that session; add the case to the unit tests in `_intermediate.yml` |
+| `dbt build` skips every mart | An upstream `error` test failed; dbt skips downstream nodes | `dbt build` output → first failure; `audit.<test name>` holds the rows |
