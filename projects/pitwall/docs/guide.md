@@ -345,10 +345,12 @@ The recordings are a photo of the API on the day they were made (last re-recorde
 | OpenF1 change | Real runs (prod/dev pipeline) | Tests, after re-recording |
 |---|---|---|
 | **New field** (e.g. `laps.tyre_temp`) | warning "dropping columns not in the contract"; field ignored | red: "new fields from OpenF1" |
-| **Field renamed** (e.g. `lane_duration` → `lane_time`) | warning for the new name, and the old column becomes **silently empty** (if it was optional); dbt null-rate tests may warn | red: new field *and* "contract fields OpenF1 no longer sends" |
-| **Field removed** | required → run **fails** (`ContractError`); optional → column silently empty | red: "contract fields OpenF1 no longer sends" |
+| **Field renamed** (e.g. `lane_duration` → `lane_time`) | two warnings: "dropping columns not in the contract" for the new name, and "contract fields absent from every record" for the old one, which loads as null (if it was optional; a required one fails the run) | red: new field *and* "contract fields OpenF1 no longer sends" |
+| **Field removed** | required → run **fails** (`ContractError`); optional → warning "contract fields absent from every record", column loads as null | red: "contract fields OpenF1 no longer sends" |
 | **Type changed** (e.g. `"P1"` instead of `1`) | run **fails** (`ContractError: cannot cast`) | red, in the ingestion tests |
 | **"No results" answer changed** | run fails on the unexpected 404 (or works, if it becomes `200 []`) | depends: update `NO_RESULTS` in `client.py` and the fake API |
+
+The absent-field warning fires only when a field is missing from *every* record of a non-empty answer, so normal nulls and empty answers stay quiet. Its blind spot: if OpenF1 kept sending the old key as `null` after a rename, nothing warns (OpenF1 sends unpopulated fields as `null` keys, e.g. `pit.stop_duration` before the 2024 US GP, which is exactly why the check is about absent keys, not nulls).
 
 So the signals to watch are a **failed pipeline run** (GitHub emails it) or a **contract warning in the run logs**. Then:
 
@@ -735,6 +737,7 @@ Checks run at five levels; each catches what the others can't:
 | `--latest` run fails with "still have no laps/stints 3 days after the race" | OpenF1 never published that race's data | Check the API by hand; re-run `--meeting <key>` once it appears |
 | A meeting's files exist in the lake but it never reaches BigQuery | Crash between the first write and the marker | Nothing to clean: the next run overwrites it; the loader ignores unmarked meetings |
 | Warning "dropping columns not in the contract" | OpenF1 added a field | Decide whether we want it; add it to `CONTRACTS` by PR |
+| Warning "contract fields absent from every record" | OpenF1 renamed or removed an optional field | Look for a matching "dropping columns" warning (a rename); update the contract and staging models by PR |
 | Run crashes in `time.sleep` with "Invalid value NaN" or a negative value | A `Retry-After` header that is negative or `nan` is passed through unclamped | Clamp the delay to `[0, MAX_DELAY]` in `backoff_delay` |
 | `load` fails with "the lake has no complete meetings to load" | No markers in the lake (wrong `PITWALL_LAKE_URI`/env, or a fresh environment) | Check `gcloud storage ls gs://pitwall-tr-<env>-raw/raw/_success/`; ingest first |
 | `load` fails on one table; some raw tables are new, others old | A load job failed midway through the twelve | Nothing downstream ran (dbt comes after); fix the cause and re-run `load` — it rebuilds everything |
@@ -750,4 +753,4 @@ Checks run at five levels; each catches what the others can't:
 | A mart test fails but the mart in BigQuery already shows the new data | dbt builds a model before testing it; only upstream failures keep the old table | The site is protected (export runs only after a green build). Fix and re-run; consider write-audit-publish if people query marts directly |
 | Degradation looks negative or zero on hard tyres | Fuel burn makes cars ~0.03–0.06 s/lap faster, hiding wear (and drying tracks on intermediates) | Expected: read the fuel-corrected curve on the site; the raw slope is documented as biased |
 | Sprint `grid_position` is null for a new season | OpenF1 renamed the sprint qualifying session again (it was "Sprint Shootout" in 2023) | Add the new name to the `case` in `fct_session_results` and to its unit test |
-| Tests green but the pipeline warns "dropping columns not in the contract" | OpenF1 added or renamed a field; the recordings are older than the change | Follow "When OpenF1 changes" in the tests section: re-record, read the diff, decide per field |
+| Tests green but the pipeline warns "dropping columns not in the contract" or "contract fields absent from every record" | OpenF1 added or renamed a field; the recordings are older than the change | Follow "When OpenF1 changes" in the tests section: re-record, read the diff, decide per field |
