@@ -81,3 +81,9 @@ Lessons learned the hard way, each turned into a rule that prevents it. A lesson
 - **Cause:** I treated the guide as a summary of the review, while conversations are deleted — the chat was the only copy of the depth.
 - **Rule:** the guide carries the review at full depth (flow, mechanisms, tables, alternatives, failure modes), plus a closing plain-language **In short** for retention.
 - **Applied in:** `agent/tutoring.md` steps 3–4, CLAUDE.md tutoring step 3, `projects/_template/docs/guide.md`.
+
+### An expert-level explanation of a tool he never used
+- **Symptom:** in the pitwall tutoring, the explanation of `tests/fixtures/` (pytest fixtures, `httpx.MockTransport`, transport layer, record/replay) was "useless" to Tomas.
+- **Cause:** I explained our project's *variant* of a technique without checking he knew the base: he had never used pytest or written a test.
+- **Rule:** before explaining a mechanism, confirm the prerequisite tool is known; if not, teach from zero — plain-words problem, a tiny example actually run (green and red), why it's needed, real-world use, then our project.
+- **Applied in:** `agent/tutoring.md` anti-patterns; memory `feedback-working-style`.

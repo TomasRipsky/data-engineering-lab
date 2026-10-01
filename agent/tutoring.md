@@ -36,6 +36,7 @@ Work is grouped into **logical blocks** of 2–4 related tasks (e.g. "the stagin
 - Written in English; committed and pushed to the private vault repo at the end of each block or task.
 
 ## Anti-patterns
+- Explaining on top of prerequisites Tomas doesn't have (e.g. pytest internals to someone who never wrote a test). Check the tool underneath first; if it's new to him, start from zero: plain-words problem → tiny runnable example → why → real world → our project.
 
 - A "Why" dump at the end of the project.
 - Quiz or interview questions instead of reasoning.
