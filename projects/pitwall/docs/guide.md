@@ -225,6 +225,41 @@ The pipeline service account has three grants ([`infra/gcp/iam.tf`](../infra/gcp
 
 > **In short.** Every run, BigQuery throws the raw tables away and rebuilds them from the lake — it's small, free and can't create duplicates. Each table is swapped in one go, so nobody ever sees a half-loaded table. The loader only takes the files listed in the "ready" markers, never "everything in the folder", so a half-written Grand Prix can't sneak in. The column types come straight from the Parquet files, which come from the contract: one definition, used end to end.
 
+### Python tests and recorded fixtures (`tests/`)
+
+65 pytest tests cover ingestion, the lake, the loader, the CLI and the site export. They run in about 3 seconds, **without network and without GCP**, which is what lets CI run them on every PR.
+
+**Two meanings of "fixture".** In pytest, a *fixture* is a function decorated with `@pytest.fixture` that prepares something a test needs; pytest injects it by parameter name (`def test_x(lake): …`). [`conftest.py`](../tests/conftest.py) is where shared ones live, discovered automatically. Separately, `tests/fixtures/openf1/` holds **recorded data**: real OpenF1 answers saved as JSON. The two meet in the `fixture_client` fixture, which serves that data.
+
+**What the JSON files are.** Twenty-one real API responses for one Grand Prix — the 2025 Chinese GP (meeting 1255: Sprint 9993 + Race 9998) — one file per request the ingestion makes, named after it:
+
+```
+laps__session_key=9998.json      ← answer to GET /laps?session_key=9998
+meetings__year=2025.json         ← answer to GET /meetings?year=2025
+starting_grid__meeting_key=1255.json
+```
+
+**How they replace the API** — record once, replay forever:
+
+```
+record (rarely, by hand)                           replay (every test run)
+tests/record_fixtures.py                           OpenF1Client(http=httpx.Client(transport=MockTransport(handler)))
+  └─ real OpenF1Client → api.openf1.org              └─ every request → _fixture_handler(request)
+  └─ keep only drivers 4 and 81 (the McLarens)            builds "<endpoint>__<sorted params>.json"
+  └─ write <endpoint>__<params>.json                      file exists → 200 + its content
+     (no rows → no file)                                  no file     → 404 {"detail": "No results found."}
+```
+
+- **The production code doesn't know.** `OpenF1Client` accepts an `httpx.Client`; tests pass one whose *transport* is `httpx.MockTransport`. Everything above the transport (URL building, params, status handling, JSON parsing, rate limiter, retries) is the real code; only the network is replaced. `min_interval=0` and a fake `sleep` remove the waiting.
+- **A missing file means "no data".** The handler answers exactly what OpenF1 answers for an empty result. Real case in the fixtures: the Sprint (9993) has no `pit__session_key=9993.json`, so the ingestion's "empty optional endpoint" path is exercised with genuine data.
+- **Trimmed to two drivers**: 248 KB instead of several MB, small enough to commit and read in a diff, while keeping real shapes (nulls, mixed types like `gap_to_leader`, real timestamps).
+- **Deterministic time.** Tests pass `NOW = datetime(2025, 4, 1)` instead of reading the clock, so "has this race finished?" always has the same answer.
+- **Hand-built responses** cover what real data rarely shows: `make_client(handler)` with a handler that returns 429s, 503s, timeouts or a non-list body tests the retry policy (`test_client.py`).
+
+**What this buys:** the integration tests run `ingest_one` end to end — API → contracts → Parquet → marker → loader plan — on real data, offline, in milliseconds, never touching the rate limit, never flaking because OpenF1 is slow. The trade-off: **recordings go stale** if OpenF1 changes. That drift is caught by the contract in real runs (an unknown field warns, a missing required field fails), and `uv run python tests/record_fixtures.py` re-records them.
+
+> **In short.** The JSON files are real answers from the F1 API for one race, saved once and replayed in every test. The tests plug a fake network into the real client: each request is answered from the matching file, or with "no results" if there isn't one. So the whole ingestion runs on real data in three seconds, without internet, without waiting for the rate limit and without a cloud account.
+
 ### Infrastructure (`infra/gcp/`, `Makefile`)
 
 Everything pitwall runs on in GCP exists because of two commands per environment: `make bootstrap` (a GCP project with billing and a budget alert, via `gcloud`, once) and `make apply` (everything *inside* the project, via Terraform). Two identical projects, `pitwall-tr-dev` and `pitwall-tr-prod`. GitHub Actions reaches them **without a single key**, and two guardrails keep the bill at zero.
