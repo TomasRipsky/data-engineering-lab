@@ -91,13 +91,27 @@ def test_unknown_column_is_dropped_with_warning(caplog):
     assert "brand_new_metric" in caplog.text
 
 
+def test_optional_field_absent_from_every_record_warns(caplog):
+    record = {**LAP, "lane_time": 20.1, "pit_duration": 23.4, "stop_duration": 2.4}
+    to_table("pit", [record], NOW)
+    assert "pit: contract fields absent from every record" in caplog.text
+    assert "['date', 'lane_duration']" in caplog.text
+
+
+def test_optional_field_present_in_some_record_does_not_warn(caplog):
+    full = {**LAP, "date": "2025-03-23T07:30:00+00:00", "pit_duration": 23.4, "stop_duration": 2.4}
+    to_table("pit", [{**full, "lane_duration": 20.1}, full], NOW)
+    assert "absent from every record" not in caplog.text
+
+
 def test_ignored_column_is_dropped_silently(caplog):
     table = to_table("laps", [{**LAP, "segments_sector_1": [2048, 2049]}], NOW)
     assert "segments_sector_1" not in table.column_names
-    assert caplog.text == ""
+    assert "dropping columns" not in caplog.text
 
 
-def test_empty_response_gives_empty_table_with_schema():
+def test_empty_response_gives_empty_table_with_schema(caplog):
     table = to_table("pit", [], NOW)
+    assert caplog.text == ""
     assert table.num_rows == 0
     assert table.schema == CONTRACTS["pit"].schema
