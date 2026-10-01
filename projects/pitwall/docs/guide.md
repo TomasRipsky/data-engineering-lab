@@ -470,6 +470,99 @@ dbt **unit tests** (YAML, dbt ≥ 1.8) feed a model hand-made input rows instead
 
 > **In short.** dbt runs our SQL files in the right order inside BigQuery and tests them on every build. Staging just cleans each raw table: one row per thing, clear names with units, no duplicates, nothing interpreted. The intermediate layer holds the racing rules: it turns "Safety Car deployed / in this lap" messages into a list of slow laps, and gives every lap its tyre, its age, its pit flags, its position at the moment it ended, and a verdict on whether it's a "clean" lap worth using to measure tyre wear. The tricky rules are pinned with small hand-made test races, so they stay right even in seasons when those situations never happen.
 
+### Transformation II: marts and data quality (`transform/models/marts/`, tests)
+
+The marts are the tables people (and `site-export`) read: one table per question, each with a stated grain, materialized as **tables**. Around them sits a layered data-quality system that decides what blocks a build, what only warns, and where the evidence goes.
+
+| Mart | Grain | Answers |
+|---|---|---|
+| `dim_sessions` | one Race or Sprint with lap data | which races exist (filters out practice, qualifying, cancelled and empty sessions) |
+| `dim_meetings` | one Grand Prix with at least one analysed race | names, circuit, dates |
+| `dim_session_drivers` | one driver in one race | name, team, team colour (drivers change teams across seasons, so it's per race) |
+| `fct_laps` | one lap of one driver in one race | `int_laps_enriched`, restricted to analysed races |
+| `fct_stints` | one set of tyres used by one driver | laps, clean laps, mean pace, **degradation** |
+| `fct_pit_stops` | one pit stop | lap, times, tyres before/after, positions before/after, neutralisation |
+| `fct_undercut_attempts` | one pit stop that is an undercut attempt | did it work? |
+| `fct_session_results` | one driver in one race | grid vs finish, points, DNF |
+
+**Dimensions and facts.** `dim_*` tables describe *things* (a race, a driver in a race) and change rarely; `fct_*` tables record *events or measurements* (a lap, a stop) and are where the numbers are. Facts carry the dimension keys (`session_key`, `driver_number`) and are joined to dimensions for names and colours. That's the star schema (Kimball) in its smallest form; marts filter through `dim_sessions`, so every fact only contains races that are actually analysed.
+
+#### 1. `fct_stints`: degradation as a least-squares slope
+
+**The question:** how many seconds per lap does a car lose as its tyres wear? Take a stint's clean laps, put lap time against tyre age, and fit the best straight line: its slope is seconds lost per lap of tyre age.
+
+```sql
+covar_samp(lap_time_s, tyre_age_laps) / nullif(var_samp(tyre_age_laps), 0) as slope
+```
+
+That *is* simple linear regression: the least-squares slope of y on x is `cov(x, y) / var(x)` — how much x and y move together, divided by how much x moves on its own. No Python, no ML library: two aggregate functions. `nullif(…, 0)` avoids a division by zero when every clean lap has the same tyre age.
+
+- **Only clean laps** (block 4): pit laps, Safety Car laps and damaged laps would wreck the line.
+- **At least 5 clean laps** or the slope is null: with 2 or 3 points a line fits anything (the unit test checks that a 2-lap stint gives `null`).
+- **Invalid stints** (missing or inverted lap ranges in the source) are excluded here; staging kept them flagged.
+
+**Read the real numbers critically.** In dev, the median slope per compound is SOFT +0.017 s/lap, MEDIUM +0.004, HARD −0.001, INTERMEDIATE −0.27. A negative "degradation" on hard tyres doesn't mean they get faster as they wear: **the car gets lighter as it burns fuel** (~0.03–0.06 s/lap faster), which hides most of the wear. Intermediates are strongly negative because a drying track gets faster every lap. The mart keeps the honest raw slope and documents the bias; the site's tyre-wear page adds a fuel correction of 0.055 s per lap run (`site_data.py`), explained on the page. A model that blends a physical assumption into a "fact" table is harder to trust than a raw fact plus a labelled correction.
+
+#### 2. `fct_pit_stops`: real stops, or inferred from tyre changes
+
+- Stops come from `pit`. Some sessions (several 2023 races) have **no pit data at all**: for those, every change from stint *n* to stint *n+1* is a stop on stint *n*'s last lap, with `source = 'stint_change'` and no times. In dev: 3,066 measured stops (median pit-lane time 23.5 s) and 223 inferred.
+- The fallback only applies to sessions with *no* pit rows (`not in sessions_with_pit_data`): mixing both sources in one race would double-count.
+- Each stop gets its context: compound before (the stint containing the lap) and after (the stint starting the next lap), position on the lap before and after, and whether the in-lap was neutralised (a stop under Safety Car costs ~10 s less — teams wait for one).
+- A final `qualify` guarantees one row per stop even with overlapping stints in the source.
+
+#### 3. `fct_undercut_attempts`: did pitting first work?
+
+**The undercut:** you're right behind a rival. You pit first; on fresh tyres your next laps are much faster than his on old ones; when he pits a lap or two later, you come out ahead. The model turns that into rules that only need positions and pit laps (a documented simplification):
+
+```
+1. attacker A pits on lap n               (red-flag stops excluded: a free tyre change, not strategy)
+2. at the end of lap n−1, A was in P and the car in P−1 (defender B) crossed the line during A's lap
+3. B pits within laps n+1 … n+3           (the response window)
+4. success = at the end of lap (B's pit lap + 1), the first lap both have stopped, A is ahead of B
+```
+
+- **"Directly ahead on the road"**, not just "one position higher": the defender's lap must end during the attacker's lap. A car one position ahead but a full lap away is not someone you can undercut. If two cars read the same position (the position feed can lag), the one that crossed the line last is the one ahead.
+- **The window boundaries are deliberate**: B pitting on the same lap is a reaction, not a response; after n+3 it's a separate strategy.
+- **Pinned by a 10-scenario unit test**: success, failure, response too late, two places behind, same-lap stop, both window edges, two cars reading P1, red-flag stop, car a lap ahead.
+- **In dev:** 697 attempts, 22 % successful (24 % excluding stops under Safety Car). The low rate is plausible: defenders usually react within a lap, and the definition ignores time gaps — a 0.5 s and a 5 s gap count the same. Gaps (`intervals`) would need the phase-2 data; the limitation is stated on the dashboard.
+
+#### 4. `fct_session_results`: mapping each grid to its race
+
+OpenF1 attaches the starting grid to the *qualifying* session that produced it. The mart maps it by name within the same weekend: Qualifying → Race, Sprint Qualifying (called *Sprint Shootout* in 2023) → Sprint. `positions_gained = grid − finish`. A unit test covers all three names. The 2023 rename is exactly the kind of thing that breaks silently without a test: the Sprint grids would just be null.
+
+#### 5. Data quality: layered, with a severity policy
+
+Checks run at five levels; each catches what the others can't:
+
+| Layer | Where | Catches | On failure |
+|---|---|---|---|
+| Contract | ingestion (`contracts.py`) | structural breakage: missing keys, wrong types | run fails, nothing written |
+| Source tests | `sources.yml`, on `raw` | impossible values: null keys, positions outside 1–30, points outside 0–30, laps < 30 s | **error**: the whole build stops before staging |
+| | | unusual-but-real values: > 2 % missing lap times in a race, unknown compounds, pit lane > 120 s, duplicates | **warn**: reported, build continues |
+| Model tests | `_staging.yml`, `_marts.yml` | broken grain (`unique`, `unique_combination_of_columns`), nulls in keys, bad `relationships` | **error**: downstream skipped |
+| Unit tests | YAML `unit_tests:` | wrong *logic* on hand-made races | **error** |
+| Singular tests | `transform/tests/*.sql` | sanity: clean laps outside 60–200 s, races with < 18 drivers, invalid stint ranges | **warn** |
+
+**The severity policy:** `error` for what would make the marts *wrong* (better a stale dashboard than a wrong one); `warn` for what is *odd but real* (a 22-minute pit stop under a red flag is history, not a bug). Note the source uniqueness tests are `warn`: duplicates in raw are expected and staging removes them — what must never be duplicated is staging's and the marts' grain, and those tests are `error`.
+
+**The audit dataset.** With `store_failures`, every test writes its failing rows to a table in `audit` (73 tables in dev). Investigating a failure is a query (`select * from audit.<test_name>`), and the evidence survives the run.
+
+**What "keeps the last good version" really means.** `dbt build` builds a model and *then* tests it:
+- A failure in a **source or upstream** test skips everything downstream: the marts are not rebuilt and keep yesterday's good data.
+- A failure in a **mart's own** test happens after that mart was already replaced in BigQuery. What protects the public site is the next gate: the workflow's `site-data` job only runs if the whole build succeeded, and `site-export` refuses to publish empty tables. The dashboard keeps the last good version; the mart table in BigQuery may not.
+
+  The fully safe version is **write-audit-publish**: build into a hidden copy, test it, and only then swap it in. Worth it when people query the marts directly; for pitwall, the site gate is enough.
+
+#### Alternatives rejected
+
+- **Degradation in Python (numpy `polyfit`)**: same number, but outside the warehouse and the tests; `covar_samp / var_samp` is one line of SQL.
+- **Fuel correction inside `fct_stints`**: blends a modelling assumption into a fact; kept as a labelled view on the site.
+- **Undercut with time gaps**: more accurate, needs `intervals` (phase 2).
+- **Great Expectations / Soda** for data quality: separate tools with their own config; dbt tests + `store_failures` cover our needs in the same build.
+- **Elementary** (dbt package for test-result history and anomaly detection): a good next step when there's an observability layer (the planned Grafana work).
+
+> **In short.** The marts are the finished tables: one per question, each saying exactly what one row is. Tyre wear is the slope of a straight line through each stint's clean laps, calculated with two SQL functions; it understates wear because cars get lighter as fuel burns, so the website adds a labelled correction. An undercut is a car pitting just behind a rival who then stops within three laps, and it "works" if the car comes out ahead. Quality checks sit at every layer: impossible data stops the build so the public dashboard keeps its last good version, odd-but-real data only raises a warning, and every failing row is saved in an `audit` dataset to look at later.
+
 ## Local vs production
 
 | | Laptop | Cloud (dev / prod) |
@@ -500,3 +593,6 @@ dbt **unit tests** (YAML, dbt ≥ 1.8) feed a model hand-made input rows instead
 | A mart test fails with duplicate keys after a source change | A fan-out join: a lap matched two stints (overlapping ranges) or two positions | Query the failing rows in `audit`; fix the join's `qualify`/condition, not the test |
 | Green laps show as `SC` for the rest of a race | A Safety Car period without an end message ran on | Check `stg_openf1__race_control` for that session; add the case to the unit tests in `_intermediate.yml` |
 | `dbt build` skips every mart | An upstream `error` test failed; dbt skips downstream nodes | `dbt build` output → first failure; `audit.<test name>` holds the rows |
+| A mart test fails but the mart in BigQuery already shows the new data | dbt builds a model before testing it; only upstream failures keep the old table | The site is protected (export runs only after a green build). Fix and re-run; consider write-audit-publish if people query marts directly |
+| Degradation looks negative or zero on hard tyres | Fuel burn makes cars ~0.03–0.06 s/lap faster, hiding wear (and drying tracks on intermediates) | Expected: read the fuel-corrected curve on the site; the raw slope is documented as biased |
+| Sprint `grid_position` is null for a new season | OpenF1 renamed the sprint qualifying session again (it was "Sprint Shootout" in 2023) | Add the new name to the `case` in `fct_session_results` and to its unit test |
