@@ -103,5 +103,5 @@ Lessons learned the hard way, each turned into a rule that prevents it. A lesson
 ### `Closes #n` only links into the default branch
 - **Symptom:** in CityPulse (default branch `main`, work merged into `dev`), ship's merge step stopped with "issue not linked" although the PR body started with `Closes #21`.
 - **Cause:** GitHub only links closing keywords — and only closes issues on merge — for PRs into the repository's default branch. The lab's `dev` is the default, so the gate held there; any repo with a different default fails it on every merge.
-- **Rule:** ship reads the default branch; the link gate applies only when it is `dev`, and the issue is closed explicitly after the merge either way.
+- **Rule:** ship refuses any PR whose base is not `dev`; it reads the default branch and applies the link gate only when that is `dev` (elsewhere it checks the body for `Closes #n`); after the merge the issue is closed explicitly if it is still open.
 - **Applied in:** `.claude/skills/ship/` (steps 3 and 6).
