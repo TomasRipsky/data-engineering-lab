@@ -87,3 +87,27 @@ Lessons learned the hard way, each turned into a rule that prevents it. A lesson
 - **Cause:** I explained our project's *variant* of a technique without checking he knew the base: he had never used pytest or written a test.
 - **Rule:** before explaining a mechanism, confirm the prerequisite tool is known; if not, teach from zero — plain-words problem, a tiny example actually run (green and red), why it's needed, real-world use, then our project.
 - **Applied in:** `agent/tutoring.md` anti-patterns; memory `feedback-working-style`.
+
+### A vault note is not an issue
+- **Symptom:** the pitwall tutoring review found that `backoff_delay` passed a negative or NaN `Retry-After` to `time.sleep` (crash on retry). It was written into the vault note *Retries and Rate Limiting*, and nothing else happened until Tomas raised it again (#44).
+- **Cause:** the vault is private, unscheduled and not in the world-status hook; a finding that lives only there has no owner and no due date.
+- **Rule:** a bug found in our code during a review becomes a GitHub issue the same day; the vault note links the fix once it ships.
+- **Applied in:** `agent/tutoring.md` (*How it fails*).
+
+### A prompt that spells out the flow still goes through `ship`
+- **Symptom:** for #44 the prompt listed issue → branch → PR, and I ran those steps by hand. When CI was pending I tried GitHub auto-merge (disabled in this repo) and offered to change the repo setting, when `ship` step 5 already says what to do: read status once, end the turn if pending, resume when Tomas says so.
+- **Cause:** a detailed prompt read as a replacement for the skill, so its gates and its pending-CI rule were skipped.
+- **Rule:** any task that ends in a PR into `dev` is shipped with the `ship` skill; the prompt's steps are input to it, not a substitute.
+- **Applied in:** `CLAUDE.md` (Git rule).
+
+### Recordings are one season; the pipeline loads all of them
+- **Symptom:** for #48 (warn when a contract field is absent from every record) I proved "no false warnings" against the 21 recordings, all from one 2025 meeting. The reviewer pointed out that `--season 2023` backfills could lack `pit.stop_duration` (documented only from the 2024 US GP) and warn on every meeting.
+- **Cause:** the recordings were treated as the population; they are a sample of the newest data.
+- **Rule:** a check on the shape of external data is verified against the oldest data the pipeline loads — one live request per old season or partition — not only against fixtures. (Here it held: OpenF1 sends unpopulated fields as `null` keys, and 404 "No results" for empty endpoints.)
+- **Applied in:** `lab/conventions.md` (Python).
+
+### A test that passes with the bug isn't pinning the rule
+- **Symptom:** the first #48 test (one record, one absent field) stayed green with the empty-response guard deleted, and with union swapped for intersection — which would warn whenever *any* record lacks a key.
+- **Cause:** TDD saw the feature fail before it existed, but with a single record "absent from every" and "absent from some" are the same; the spec's clauses (*every*, *non-empty*, *optional only*) had no test each.
+- **Rule:** one test per clause of the behaviour, each shown to bite: break the guarded line once (drop the guard, flip the operator) and watch that test go red.
+- **Applied in:** `lab/conventions.md` (Python).

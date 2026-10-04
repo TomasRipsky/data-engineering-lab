@@ -7,6 +7,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 - **Tutor reviews end with a plain-language summary and are written into the project guide at chat depth** (Tomas, pitwall tutoring): details give understanding, the summary gives retention, and the guide outlives the deleted conversation. `agent/tutoring.md`, CLAUDE.md, `projects/_template/docs/guide.md`.
+- **External-data checks are verified against the oldest data loaded, and each clause of a behaviour gets a test that bites** (`lab/conventions.md`): #48 proved "no false warnings" on one season's recordings only, and its first test passed with the guard removed.
+- **Review findings become issues the same day** (`agent/tutoring.md`): the Retry-After bug (#44) sat only in a vault note.
+- **`ship` is mandatory for every PR into `dev`** (CLAUDE.md), even when the prompt dictates the steps: in #44 the manual flow missed its pending-CI rule.
 - **`ship`: the issue-link check is a gate inside the merge step.** Right after PR creation GitHub may not have computed the link yet (false "not linked"), and an advisory STOP in an earlier step was ignored by a scripted run during the v1.0.0 release.
 - **Closing pass before a conversation ends** (CLAUDE.md): Tomas deletes finished conversations, so decisions, lessons, state and the next step are persisted before a milestone closes.
 

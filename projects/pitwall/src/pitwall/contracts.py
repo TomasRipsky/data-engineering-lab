@@ -1,7 +1,8 @@
 """Explicit schemas for OpenF1 endpoints: the contract between the API and the lake.
 
 A required field that is missing fails the run; an unknown field is dropped with a warning
-until it is added here by PR, so schema evolution is always a reviewed decision.
+until it is added here by PR, so schema evolution is always a reviewed decision. An optional
+field absent from every record of a non-empty response also warns: that is how a rename shows.
 """
 
 from __future__ import annotations
@@ -253,10 +254,18 @@ def _coerce(endpoint: str, name: str, value: Any, dtype: pa.DataType) -> Any:
 def to_table(endpoint: str, records: list[dict[str, Any]], ingested_at: datetime) -> pa.Table:
     """Cast API records to the endpoint contract and stamp them with `_ingested_at`."""
     contract = CONTRACTS[endpoint]
-    unknown = {key for record in records for key in record} - contract.fields.keys()
-    unknown -= contract.ignored
+    sent = set().union(*records)
+    unknown = sent - contract.fields.keys() - contract.ignored
     if unknown:
         log.warning("%s: dropping columns not in the contract: %s", endpoint, sorted(unknown))
+    # Required fields fail below; an optional one missing everywhere is likely a rename upstream.
+    absent = contract.fields.keys() - contract.required - sent
+    if records and absent:
+        log.warning(
+            "%s: contract fields absent from every record, loaded as null: %s",
+            endpoint,
+            sorted(absent),
+        )
 
     columns = {}
     for name, dtype in contract.fields.items():

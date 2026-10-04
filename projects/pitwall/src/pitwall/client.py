@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import random
 import time
 from collections.abc import Callable
@@ -48,12 +49,16 @@ def backoff_delay(
     """Seconds to wait before retrying after failed `attempt` (1-based).
 
     Honours a numeric Retry-After header; otherwise exponential backoff with jitter.
+    A negative or non-finite value counts as missing (time.sleep rejects it).
     """
     if retry_after is not None:
         try:
-            return min(float(retry_after), MAX_DELAY)
+            seconds = float(retry_after)
         except ValueError:
             pass  # HTTP-date form: fall back to our own backoff
+        else:
+            if math.isfinite(seconds) and seconds >= 0:
+                return min(seconds, MAX_DELAY)
     return min(2.0**attempt + rng(), MAX_DELAY)
 
 

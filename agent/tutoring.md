@@ -22,7 +22,7 @@ Work is grouped into **logical blocks** of 2–4 related tasks (e.g. "the stagin
 - **Alternatives rejected** and what would make them the right choice.
 - **Technical characteristics to keep in mind** — limits, defaults, costs, security implications.
 - **Local vs production** — what changes from the laptop to the cloud.
-- **How it fails** — the failure modes we hit or will hit, and how to debug them.
+- **How it fails** — the failure modes we hit or will hit, and how to debug them. A bug the review finds in *our* code becomes a GitHub issue the same day; a vault note records it, it does not track it.
 - **Where else it applies** — the transferable principle (e.g. process groups: hooks, Docker, orchestrators).
 
 ## Vault note standard
