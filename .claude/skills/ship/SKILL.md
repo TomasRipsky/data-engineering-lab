@@ -28,6 +28,8 @@ The body starts with `Closes #$ISSUE`, then a summary, verification results, and
 
 ## 3. Check the issue link (early warning)
 Right after `gh pr create`, GitHub may not have computed the link yet — a "not linked" here can be a false negative. Re-run in a minute; step 6 enforces it as a gate.
+
+GitHub only links `Closes #n` for PRs into the repository's **default** branch. In a repo whose default is `main` while work merges into `dev` (e.g. CityPulse), the link never appears: skip this step there — step 6 detects it and closes the issue explicitly after the merge.
 ```bash
 ISSUE=$(git branch --show-current | sed -nE 's#^[a-z]+/([0-9]+)-.*#\1#p'); : "${ISSUE:?not a work branch}"
 PR=$(gh pr view --json number -q .number); : "${PR:?no PR for this branch}"
@@ -47,12 +49,13 @@ Non-trivial change (pipeline, SQL model, infra, dependency, workflow, hook, skil
 - Anything declined is a ruling with its cost-if-wrong, reported to Tomas.
 
 ## 6. Merge and close the issue
-Gates, in order: issue linked → checks not pending → checks not failing → head unchanged since review. One block, so `ISSUE` and `PR` are still known after the branch is deleted:
+Gates, in order: issue linked (only when `dev` is the default branch) → checks not pending → checks not failing → head unchanged since review. One block, so `ISSUE` and `PR` are still known after the branch is deleted:
 ```bash
 ISSUE=$(git branch --show-current | sed -nE 's#^[a-z]+/([0-9]+)-.*#\1#p'); : "${ISSUE:?not a work branch}"
 PR=$(gh pr view --json number -q .number); : "${PR:?no PR for this branch}"
+DEFAULT=$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name)  # links exist only into it
 gh pr checks "$PR" >/dev/null 2>&1; rc=$?   # 0 = all passed, 8 = pending, other = failed or none reported
-if ! gh pr view "$PR" --json closingIssuesReferences -q '.closingIssuesReferences[].number' | grep -qx "$ISSUE"; then
+if [[ "$DEFAULT" == dev ]] && ! gh pr view "$PR" --json closingIssuesReferences -q '.closingIssuesReferences[].number' | grep -qx "$ISSUE"; then
   echo "STOP: issue #$ISSUE not linked to PR #$PR (fix the body; re-run in a minute if the PR is brand new)"
 elif [[ $rc -eq 8 ]]; then echo "STOP: checks pending"
 elif [[ $rc -ne 0 ]] && ! gh pr checks "$PR" 2>&1 | grep -q "no checks reported"; then echo "STOP: checks failing"
@@ -65,7 +68,7 @@ fi
 ```
 - `--match-head-commit` refuses the merge if anything was pushed after the review.
 - "no checks reported" passes only because step 4 established that no workflow applies.
-- GitHub registers the link but does not always close the issue on merge into `dev` (cause unknown — `agent/lessons.md`), hence the explicit check.
+- GitHub registers the link but does not always close the issue on merge into `dev` (cause unknown — `agent/lessons.md`), hence the explicit check. When `dev` is not the default branch there is no link at all, and the explicit close is what delivers the issue.
 
 ## 7. Record and report
 - Update memory (`lab-state`) if the project state changed.

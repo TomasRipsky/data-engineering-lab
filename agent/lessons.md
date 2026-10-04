@@ -99,3 +99,9 @@ Lessons learned the hard way, each turned into a rule that prevents it. A lesson
 - **Cause:** TDD saw the feature fail before it existed, but with a single record "absent from every" and "absent from some" are the same; the spec's clauses (*every*, *non-empty*, *optional only*) had no test each.
 - **Rule:** one test per clause of the behaviour, each shown to bite: break the guarded line once (drop the guard, flip the operator) and watch that test go red.
 - **Applied in:** `lab/conventions.md` (Python).
+
+### `Closes #n` only links into the default branch
+- **Symptom:** in CityPulse (default branch `main`, work merged into `dev`), ship's merge step stopped with "issue not linked" although the PR body started with `Closes #21`.
+- **Cause:** GitHub only links closing keywords — and only closes issues on merge — for PRs into the repository's default branch. The lab's `dev` is the default, so the gate held there; any repo with a different default fails it on every merge.
+- **Rule:** ship reads the default branch; the link gate applies only when it is `dev`, and the issue is closed explicitly after the merge either way.
+- **Applied in:** `.claude/skills/ship/` (steps 3 and 6).
