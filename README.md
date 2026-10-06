@@ -31,6 +31,7 @@ The repo is **the world**: the rules every project follows (`lab/`) and the AI t
 | Project | What it does | Stack | Status |
 |---|---|---|---|
 | [pitwall](projects/pitwall/) | Batch ELT over Formula 1 data (OpenF1 → GCS → BigQuery → dbt → Observable site) that explains race strategy — tyres, pit stops and the undercut — to people who don't follow F1. | Python · GCS · BigQuery · dbt · GitHub Actions · Observable | ✅ live — [dashboard](https://tomasripsky.github.io/data-engineering-lab/pitwall/) |
+| [CityPulse](https://github.com/TomasRipsky/CityPulse_Analytics) *(own repo)* | Does the weather change how New York rides bikes? Batch ELT over Open-Meteo weather and air quality and 44.5 M Citi Bike trips (GCS → BigQuery → dbt, orchestrated by Airflow 3) — rebuilt from a pre-lab project with the lab's rules. | Python · GCS · BigQuery · dbt · Airflow · Terraform · Observable | ✅ v2.0.0 — [site](https://tomasripsky.github.io/CityPulse_Analytics/) |
 
 ## Navigate
 
