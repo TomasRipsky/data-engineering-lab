@@ -105,3 +105,15 @@ Lessons learned the hard way, each turned into a rule that prevents it. A lesson
 - **Cause:** GitHub only links closing keywords — and only closes issues on merge — for PRs into the repository's default branch. The lab's `dev` is the default, so the gate held there; any repo with a different default fails it on every merge.
 - **Rule:** ship refuses any PR whose base is not `dev`; it reads the default branch and applies the link gate only when that is `dev` (elsewhere it checks the body for `Closes #n`); after the merge the issue is closed explicitly if it is still open.
 - **Applied in:** `.claude/skills/ship/` (steps 3 and 6).
+
+### Probing a destructive command on a real target
+- **Symptom:** while trimming CityPulse prod to a frozen window, a cleanup loop hid its `bq` errors (`>/dev/null`) and silently dropped nothing; probing one removal by hand then deleted an in-window partition (July 2025) — restored from the lake in minutes.
+- **Cause:** a destructive action run from a computed list that was never shown, and a "quick test" aimed at real data.
+- **Rule:** for any destructive operation, write the exact targets to a file, review their count and range, then execute with errors visible; never probe a destructive command on a real target.
+- **Applied in:** this file; CityPulse guide chapter 12.
+
+### Long local jobs on a laptop
+- **Symptom:** a local Airflow backfill lost monthly tasks for hours: the Mac slept, tasks hung 30–77 min until killed.
+- **Cause:** long-running work on a machine with idle sleep, and tasks without timeouts.
+- **Rule:** keep the machine awake while local jobs run (`caffeinate -dims`), give tasks an `execution_timeout`, log progress per step, and make every step safe to re-run.
+- **Applied in:** CityPulse `Makefile` (`airflow-up` hint), DAG timeouts.
