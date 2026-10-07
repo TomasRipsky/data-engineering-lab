@@ -12,6 +12,20 @@ t() { perl -e 'my $s = shift; my $pid = fork // exit 1;
 echo "World status ($(date -u +%F)):"
 git rev-parse --git-dir >/dev/null 2>&1 || { echo "- not a git repo"; exit 0; }
 echo "- branch: $(git branch --show-current 2>/dev/null | grep . || echo "detached at $(git rev-parse --short HEAD 2>/dev/null)")"
+# Skills, hooks and CLAUDE.md load from the checked-out branch: name the rule files dev changed since
+# this branch forked (as of the last fetch), so a stale skill is not followed. main lags dev by design;
+# agent/CHANGELOG.md and agent/lessons.md are records, not rules.
+branch=$(git branch --show-current 2>/dev/null)
+if [[ $branch != main ]]; then
+  stale=$(git diff --name-only HEAD...origin/dev -- .claude CLAUDE.md agent \
+    ':!agent/CHANGELOG.md' ':!agent/lessons.md' 2>/dev/null)
+  if [[ -n $stale ]]; then
+    n=$(wc -l <<<"$stale"); list=$(head -8 <<<"$stale" | paste -sd ' ' -)
+    (( n > 8 )) && list+=" (+$((n - 8)) more)"
+    fix="merge dev in"; [[ $branch == dev ]] && fix="git pull --ff-only"
+    echo "- stale rules: origin/dev changed $list since this branch forked — read those from origin/dev or $fix"
+  fi
+fi
 command -v gh >/dev/null || exit 0
 # Public repo: anyone can open issues/PRs, so only the owner's titles enter Claude's context; others are counted.
 owner=$(t gh repo view --json owner -q .owner.login) || exit 0

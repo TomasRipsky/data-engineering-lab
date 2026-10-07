@@ -117,3 +117,9 @@ Lessons learned the hard way, each turned into a rule that prevents it. A lesson
 - **Cause:** long-running work on a machine with idle sleep, and tasks without timeouts.
 - **Rule:** keep the machine awake while local jobs run (`caffeinate -dims`), give tasks an `execution_timeout`, log progress per step, and make every step safe to re-run.
 - **Applied in:** CityPulse `Makefile` (`airflow-up` hint), DAG timeouts.
+
+### Rules load from the checked-out branch
+- **Symptom:** during the CityPulse v2.0.1 release, `ship` stopped a valid merge with "issue not linked" — the gate #55 had already fixed.
+- **Cause:** skills, hooks and CLAUDE.md are read from the lab checkout's current branch; the session sat on `docs/43-pitwall-guide`, forked before #55, so it ran the old `ship`.
+- **Rule:** at session start, any rule file that `origin/dev` changed since the branch forked is named; read those from `origin/dev` (or merge `dev` in) before following them.
+- **Applied in:** `.claude/hooks/world-status.sh` (with a regression test).
