@@ -52,17 +52,36 @@ expect hang '[[ $secs -lt 10 ]]' "took ${secs}s"
 
 # a work branch behind origin/dev on the lab's rules: warned, with the files named
 RULES=$(mktemp -d)
-( cd "$RULES" && git init -q && git config user.email t@t && git config user.name t \
-  && mkdir -p .claude/skills/ship && echo old > .claude/skills/ship/SKILL.md && echo a > README.md \
-  && git add -A && git commit -qm base && git branch -q work \
-  && echo new > .claude/skills/ship/SKILL.md && echo b > README.md && git commit -qam rules \
-  && git update-ref refs/remotes/origin/dev HEAD && git checkout -q work )
+g() { git -C "$RULES" -c user.email=t@t -c user.name=t -c commit.gpgsign=false "$@"; }
+g init -q && mkdir -p "$RULES/.claude/skills/ship" "$RULES/agent" \
+  && echo old > "$RULES/.claude/skills/ship/SKILL.md" && echo a > "$RULES/README.md" \
+  && g add -A && g commit -qm base && g branch -q work \
+  && echo new > "$RULES/.claude/skills/ship/SKILL.md" && echo b > "$RULES/README.md" && echo l > "$RULES/agent/lessons.md" \
+  && g add -A && g commit -qm rules && g update-ref refs/remotes/origin/dev HEAD \
+  && g checkout -q work && mkdir -p "$RULES/agent" && echo mine > "$RULES/agent/own.md" && g add -A && g commit -qm own
 run '' "$RULES"
 expect stale-rules '[[ $rc -eq 0 ]]' "exit $rc"
 expect stale-rules 'grep -qF ".claude/skills/ship/SKILL.md" <<<"$out"' "stale rule file not named"
 expect stale-rules '! grep -qF "README.md" <<<"$out"' "a non-rule file was named"
+expect stale-rules '! grep -qF "agent/lessons.md" <<<"$out"' "a record (lessons) was named as a rule"
+expect stale-rules '! grep -qF "agent/own.md" <<<"$out"' "the branch's own edit was named (two-dot diff?)"
+expect stale-rules 'grep -qF "merge dev in" <<<"$out"' "work-branch remedy missing"
+# on main (behind dev by design): no warning
+g checkout -q -b main origin/dev~1
+run '' "$RULES"
+expect main-skipped '! grep -qi "stale" <<<"$out"' "warned on main"
+# on dev behind origin/dev: the remedy is a pull
+g checkout -q -b dev origin/dev~1
+run '' "$RULES"
+expect dev-behind 'grep -qF "git pull --ff-only" <<<"$out"' "dev remedy is not a pull"
+# more than eight stale files: the rest are counted, never dropped silently
+g checkout -q work
+for i in 1 2 3 4 5 6 7 8 9 10; do echo x > "$RULES/.claude/r$i.md"; done
+g checkout -q --detach origin/dev && g add -A && g commit -qm many && g update-ref refs/remotes/origin/dev HEAD && g checkout -q work
+run '' "$RULES"
+expect many-stale 'grep -qF "(+3 more)" <<<"$out"' "files beyond eight not counted"
 # the same branch once dev is merged in: no warning
-( cd "$RULES" && git merge -q --no-edit origin/dev )
+g merge -q --no-edit origin/dev
 run '' "$RULES"
 expect fresh-rules '! grep -qi "stale" <<<"$out"' "warned on an up-to-date branch"
 rm -rf "$RULES"
