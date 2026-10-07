@@ -50,5 +50,22 @@ run 'sleep 30'
 expect hang '[[ $rc -eq 0 ]]' "exit $rc"
 expect hang '[[ $secs -lt 10 ]]' "took ${secs}s"
 
+# a work branch behind origin/dev on the lab's rules: warned, with the files named
+RULES=$(mktemp -d)
+( cd "$RULES" && git init -q && git config user.email t@t && git config user.name t \
+  && mkdir -p .claude/skills/ship && echo old > .claude/skills/ship/SKILL.md && echo a > README.md \
+  && git add -A && git commit -qm base && git branch -q work \
+  && echo new > .claude/skills/ship/SKILL.md && echo b > README.md && git commit -qam rules \
+  && git update-ref refs/remotes/origin/dev HEAD && git checkout -q work )
+run '' "$RULES"
+expect stale-rules '[[ $rc -eq 0 ]]' "exit $rc"
+expect stale-rules 'grep -qF ".claude/skills/ship/SKILL.md" <<<"$out"' "stale rule file not named"
+expect stale-rules '! grep -qF "README.md" <<<"$out"' "a non-rule file was named"
+# the same branch once dev is merged in: no warning
+( cd "$RULES" && git merge -q --no-edit origin/dev )
+run '' "$RULES"
+expect fresh-rules '! grep -qi "stale" <<<"$out"' "warned on an up-to-date branch"
+rm -rf "$RULES"
+
 [[ $fail -eq 0 ]] && echo "all world-status tests passed"
 exit $fail

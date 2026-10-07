@@ -12,6 +12,10 @@ t() { perl -e 'my $s = shift; my $pid = fork // exit 1;
 echo "World status ($(date -u +%F)):"
 git rev-parse --git-dir >/dev/null 2>&1 || { echo "- not a git repo"; exit 0; }
 echo "- branch: $(git branch --show-current 2>/dev/null | grep . || echo "detached at $(git rev-parse --short HEAD 2>/dev/null)")"
+# Skills, hooks and CLAUDE.md load from the checked-out branch: name the rule files dev changed since
+# this branch forked (as of the last fetch), so a stale skill is not followed.
+stale=$(git diff --name-only HEAD...origin/dev -- .claude CLAUDE.md agent 2>/dev/null | head -8 | paste -sd ' ' -)
+[[ -n $stale ]] && echo "- stale rules: origin/dev changed $stale since this branch forked — read those from origin/dev or merge dev in"
 command -v gh >/dev/null || exit 0
 # Public repo: anyone can open issues/PRs, so only the owner's titles enter Claude's context; others are counted.
 owner=$(t gh repo view --json owner -q .owner.login) || exit 0
