@@ -1,6 +1,6 @@
 # Project Name — How it works
 
-The walkthrough: read this after the [README](../README.md) to understand the insides. Written during the tutor reviews, so every section explains *why*, not only *what*.
+The walkthrough: read this after the [README](../README.md) to understand the insides. Written during the tutor reviews, so every section explains *why*, not only *what*, and each component ends with an **In short** summary in plain words — read those alone for a quick refresher.
 
 ## Read this first
 
@@ -16,7 +16,7 @@ The walkthrough: read this after the [README](../README.md) to understand the in
 
 ## Components explained
 
-*Per component: what it does, how it works (key code or SQL, line by line where it matters), why it was built this way, and the alternatives we rejected.*
+*Per component: what it does, how it works (key code or SQL, line by line where it matters), why it was built this way, the alternatives we rejected, and a closing **In short** (3–5 plain sentences to remember it by).*
 
 ## Local vs production
 

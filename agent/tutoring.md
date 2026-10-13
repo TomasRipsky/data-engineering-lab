@@ -11,7 +11,9 @@ Work is grouped into **logical blocks** of 2–4 related tasks (e.g. "the stagin
 2. **Execute** without blocking.
 3. **Tutor review after** — my reasoning as an elite engineer (below). No quiz questions: the goal is to transfer judgment, not to test.
    > *Example (Lab 1.0, block 1):* why moves and edits go in separate commits (git detects renames by similarity), why the pre-commit failure was good news (ruff resolves config by location), why the link checker had to be seen failing.
-4. **Vault** — each technology or technique used becomes didactic knowledge in the private Obsidian vault, built on our own cases (standard below).
+   The review **ends with a short plain-language summary** ("En pocas palabras" in chat, **In short** in the guide): 3–5 sentences, no jargon, what Tomas should remember a month later. The technical detail is for understanding; the summary is for retention.
+4. **Guide** — in a project, the review goes into `projects/<p>/docs/guide.md` at the same depth as the chat (flow, mechanisms, alternatives, failure modes, In short), in English. Conversations are deleted; the guide is where the explanation survives.
+5. **Vault** — each technology or technique used becomes didactic knowledge in the private Obsidian vault, built on our own cases (standard below).
 
 ## What an "elite engineer review" covers
 
@@ -28,11 +30,13 @@ Work is grouped into **logical blocks** of 2–4 related tasks (e.g. "the stagin
 - **Template:** `09 - Templates/Technology Template.md` (or Concept). Its sections *How it works inside*, *Local vs production*, *In my projects* and *Problems I hit and why* are the ones the tutor reviews feed.
 - **In my projects** cites repo paths and dates: what we built, why it was configured that way.
 - **Problems I hit and why** is written as symptom → cause → fix, from real runs.
+- **Pattern cards:** when a review surfaces a transferable idea Tomas didn't know (the success marker was the model case), it gets a card in `11 - Patterns/` (Pattern template): in short, problem, idea, origin, where you'll meet it, how it's implemented, pitfalls, our case. I own the vault's structure and may reshape it as I learn what works.
 - **Enrich before creating:** extend the existing note; create a new one only when no note covers the concept, and link it from `00 - Home.md`.
 - **Status** moves seed → growing → evergreen as the note gains real cases and survives rereading.
 - Written in English; committed and pushed to the private vault repo at the end of each block or task.
 
 ## Anti-patterns
+- Explaining on top of prerequisites Tomas doesn't have (e.g. pytest internals to someone who never wrote a test). Check the tool underneath first; if it's new to him, start from zero: plain-words problem → tiny runnable example → why → real world → our project.
 
 - A "Why" dump at the end of the project.
 - Quiz or interview questions instead of reasoning.
