@@ -65,6 +65,8 @@ PR=$(gh pr view --json number -q .number); : "${PR:?no PR for this branch}"
 DEFAULT=$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name); : "${DEFAULT:?cannot read the default branch}"
 BASE=$(gh pr view "$PR" --json baseRefName -q .baseRefName)
 gh pr checks "$PR" >/dev/null 2>&1; rc=$?   # 0 = all passed, 8 = pending, other = failed or none reported
+NOCHECKS=0; gh pr checks "$PR" 2>&1 | grep -q "no checks reported" && NOCHECKS=1
+HASCI=0; grep -rqs "pull_request" .github/workflows && HASCI=1   # does this repository run CI on pull requests?
 if [[ "$BASE" != dev ]]; then
   echo "STOP: PR #$PR targets '$BASE', not dev — ship never merges into main (that is /release)"
 elif [[ "$DEFAULT" == dev ]] && ! gh pr view "$PR" --json closingIssuesReferences -q '.closingIssuesReferences[].number' | grep -qx "$ISSUE"; then
@@ -72,7 +74,8 @@ elif [[ "$DEFAULT" == dev ]] && ! gh pr view "$PR" --json closingIssuesReference
 elif [[ "$DEFAULT" != dev ]] && ! gh pr view "$PR" --json body -q .body | grep -qx "Closes #$ISSUE"; then
   echo "STOP: the body of PR #$PR lacks a 'Closes #$ISSUE' line"
 elif [[ $rc -eq 8 ]]; then echo "STOP: checks pending"
-elif [[ $rc -ne 0 ]] && ! gh pr checks "$PR" 2>&1 | grep -q "no checks reported"; then echo "STOP: checks failing"
+elif [[ $NOCHECKS -eq 1 && $HASCI -eq 1 ]]; then echo "STOP: no checks reported, but this repository runs CI on pull requests — the run has not registered yet or the trigger was removed; re-read in a minute"
+elif [[ $rc -ne 0 && $NOCHECKS -eq 0 ]]; then echo "STOP: checks failing"
 elif gh pr merge "$PR" --squash --delete-branch --match-head-commit "$(git rev-parse HEAD)"; then
   git switch dev && git pull --ff-only      # gh may leave local dev behind
   [[ "$(gh issue view "$ISSUE" --json state -q .state)" == CLOSED ]] \
@@ -81,7 +84,7 @@ elif gh pr merge "$PR" --squash --delete-branch --match-head-commit "$(git rev-p
 fi
 ```
 - `--match-head-commit` refuses the merge if anything was pushed after the review.
-- "no checks reported" passes only because step 4 established that no workflow applies.
+- "no checks reported" passes only in a repository with no pull-request workflow at all (the lab), where step 1's local gates are the CI. Where a workflow listens to `pull_request`, no checks means "not registered yet" (right after a push) or "trigger removed" — both stop the merge.
 - GitHub registers the link but does not always close the issue on merge into `dev` (cause unknown — `agent/lessons.md`), hence the explicit check. When `dev` is not the default branch there is no link at all, and the explicit close (if the issue is still open) is what delivers it.
 
 ## 7. Record and report

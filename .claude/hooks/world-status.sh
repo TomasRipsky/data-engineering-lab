@@ -2,6 +2,7 @@
 # SessionStart hook: a short "state of the world" added to Claude's context (stdout on exit 0).
 # Never fails, never blocks: every gh call has a timeout and any failure just ends the report.
 set -u
+set -o pipefail  # `gh … | jq …` must fail when gh fails or times out, not only when jq does
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
 # 5 s per call (macOS has no `timeout`). The call runs in its own process group and the whole group is
 # killed on timeout: killing only gh would leave children holding stdout open, and $(...) would wait.
@@ -34,15 +35,19 @@ issues=$(t gh issue list --state open --limit 20 --json number,title,author | jq
 prs=$(t gh pr list --state open --limit 20 --json number,title,author | jq -r --arg o "$owner" "$fmt") || exit 0
 echo "- issues: $(paste -sd ';' - <<<"${issues:-none}")"
 echo "- PRs: $(paste -sd ';' - <<<"${prs:-none}")"
-# One repository per project (lab ADR 0007): the README's Projects table is the registry. Same
-# owner-only rule for titles; the last run ignores pull requests (CI) to show pipelines and deploys.
+# One repository per project (lab ADR 0007): the README's Projects table is the registry. Only the
+# owner's repositories are queried, with the same owner-only rule for titles. The last run counts only
+# events a stranger cannot cause (push, schedule, manual): a fork's pull request can name a workflow.
 # The first call that fails or times out ends the report, so a hanging gh costs one timeout, not nine.
+runfmt='[.[] | select(.event == "push" or .event == "schedule" or .event == "workflow_dispatch")][0] // empty
+  | "\(.workflowName) \(.status)/\(.conclusion // "-") \(.createdAt[:10])"'
 for repo in $(awk '/^## Projects/{f=1;next} /^## /{f=0} f && /^\|/' README.md 2>/dev/null \
     | grep -oE 'github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+' | sed 's#^github\.com/##' | awk '!seen[$0]++'); do
-  pi=$(t gh issue list -R "$repo" --state open --limit 20 --json number,title,author | jq -r --arg o "$owner" "$fmt") || break
-  pp=$(t gh pr list -R "$repo" --state open --limit 20 --json number,title,author | jq -r --arg o "$owner" "$fmt") || break
-  pr=$(t gh run list -R "$repo" --limit 15 --json workflowName,status,conclusion,createdAt,event \
-    -q '[.[] | select(.event != "pull_request")][0] | "\(.workflowName) \(.status)/\(.conclusion // "-") \(.createdAt[:10])"') || break
+  [[ ${repo%%/*} == "$owner" ]] || continue
+  pi=$(t gh issue list -R "$repo" --state open --limit 20 --json number,title,author | jq -r --arg o "$owner" "$fmt") \
+    && pp=$(t gh pr list -R "$repo" --state open --limit 20 --json number,title,author | jq -r --arg o "$owner" "$fmt") \
+    && pr=$(t gh run list -R "$repo" --limit 20 --json workflowName,status,conclusion,createdAt,event | jq -r "$runfmt") \
+    || { echo "- ${repo#*/}: unavailable"; break; }
   echo "- ${repo#*/}: issues: $(paste -sd ';' - <<<"${pi:-none}") · PRs: $(paste -sd ';' - <<<"${pp:-none}") · last run: ${pr:-none}"
 done
 exit 0
