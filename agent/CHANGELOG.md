@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-13
+
 ### Changed
 - **The lab is my base and every project is its own repository** ([lab ADR 0007](../lab/adr/0007-one-repository-per-project.md)): sessions start here and add the project's clone as a working directory. `new-project` creates a repository from `template/` (local clone, public repository, rulesets, labels) instead of a folder; `ship`, `release` and `pr-reviewer` act on a named target repository and every shell block starts with an explicit `cd`.
 - **`world-status` reports each project repository** listed in the README's Projects table (owner-only issue and PR titles, last non-PR workflow run) instead of one hard-coded pipeline.
