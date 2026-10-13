@@ -28,6 +28,7 @@ Chat in Spanish. Code, commits, READMEs, ADRs, docs and the vault in English.
 - `README.md` world map · `agent/` how I work and evolve · `lab/` rules, ADRs, tech radar, lab designs
 - **Projects are separate repositories**, cloned in `~/Data Engineering/Proyectos Data/<p>` and listed in the README's Projects table: `README.md` (what/run/cost/learned), `docs/guide.md` (how it works), `docs/design/`, `docs/decisions/`, `infra/<cloud>/`, `site/` (its own public site, exported data only), its own CI, issues and releases. Sessions start **here**; add the project's clone as a working directory, and begin every shell block with `cd` to the repository it acts on. New project → `/new-project`, never hand-copy; improve `template/` when a project teaches something reusable.
 - `template/` what a new project repository starts as · `site/` the portfolio hub: one static page linking each project's site (`site/README.md`).
+- **Every project's site is a story page + a BI page** in its domain's personality, fed by tested dbt report models (lab ADR 0008; rules in `template/site/README.md`). Study MarineFlow, CityPulse and pitwall before designing one.
 - Vault `~/Data Engineering/Second Brain` (private): concepts, `07 - Laboratory/` project notes, `10 - Ideas/` ideas and business. Templates in `09 - Templates/`; status seed → growing → evergreen.
 - graphify is a derived index over repo and vault, never the source of truth; use it (`--update`) when it saves tokens without losing context.
 

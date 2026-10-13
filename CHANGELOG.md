@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+### Added
+- **Showcase site standard** ([lab ADR 0008](lab/adr/0008-showcase-site-standard.md)): every project is shown with a story page and a BI page. `template/site/` now carries the shared skeleton (`lab.css`, `lab.js`), a neutral theme, working story and BI page stubs and the rules; `lab/conventions.md` has the section.
+
+### Changed
+- The hub's pitwall redirects point straight at the sections of pitwall's new one-page site.
+
 ## [2.0.0] - 2026-10-13
 
 ### Changed
