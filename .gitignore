@@ -44,17 +44,9 @@ profiles.yml
 
 # Local data (anchored: nested src/<pkg>/data or tests/data stay tracked)
 /data/
-projects/*/data/
 *.duckdb
 *.duckdb.wal
 
 # Tools
 graphify-out/
 .claude/settings.local.json
-
-# Lab site (Observable Framework)
-site/node_modules/
-site/dist/
-site/src/.observablehq/cache/
-# exported by each project before the build; never committed
-site/src/*/data/

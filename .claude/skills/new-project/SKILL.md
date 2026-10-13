@@ -1,71 +1,91 @@
 ---
 name: new-project
-description: Start a new data engineering project in this lab — checks the stack is industry-standard, creates the GitHub issue, branch from dev, copies projects/_template (README, docs/guide.md, docs/design/, docs/decisions/), renames the package, registers it in the README and vault, and opens a PR. Use when Tomas asks to start, create or bootstrap a project.
+description: Start a new data engineering project from this lab — checks the stack is industry-standard, creates the project's own repository from template/ (local clone next to the lab, public GitHub repository with dev/main, rulesets and labels), registers it in the lab README, hub and vault. Use when Tomas asks to start, create or bootstrap a project.
 ---
 
 # New project
 
+One repository per project (lab ADR 0007). The lab stays the base: this session runs in the lab, the project is a sibling clone in `~/Data Engineering/Proyectos Data/<name>`, added to the session as a working directory.
+
+**Every bash block is self-contained and starts with an explicit, guarded `cd … || exit 1`:** shell variables do not survive between tool calls and the Bash tool resets its directory outside the session's folders. Set `NAME` again in each block. The guard matters: a typo in the name must stop the block, not let it run `git add -A` or a rename over the lab checkout.
+
 ## 1. Name (validate before touching GitHub)
 Ask for (or confirm) a kebab-case name and a one-line pitch.
 ```bash
+NAME=<name>
 [[ "$NAME" =~ ^[a-z][a-z0-9]*(-[a-z0-9]+)*$ ]] || { echo "invalid name: $NAME"; exit 1; }
 PKG="${NAME//-/_}"
 python3 -c "import keyword,sys; n=sys.argv[1]; sys.exit(keyword.iskeyword(n) or n in sys.stdlib_module_names)" "$PKG" \
   || { echo "$PKG clashes with a Python keyword or stdlib module"; exit 1; }
-[[ -e "projects/$NAME" ]] && { echo "projects/$NAME already exists"; exit 1; }
+[[ -e "$HOME/Data Engineering/Proyectos Data/$NAME" ]] && { echo "folder already exists"; exit 1; }
+gh repo view "TomasRipsky/$NAME" >/dev/null 2>&1 && { echo "repository already exists"; exit 1; }
+echo "ok: $NAME"
 ```
 Also reject names equal to a planned dependency (e.g. `pytest`, `pandas`) — ask Tomas for another.
 
 ## 1b. Industry-standard check
-For the intended core stack (ingestion, storage, transformation, orchestration, serving), state the market signal of each choice in one line: job-market demand and adoption. Sources: vault `08 - Research/Market Signals 2026.md` and `lab/tech-radar.md`; check current signals (web) when a tech is not there. A niche choice needs an explicit reason Tomas accepts — it becomes an ADR in the project's `docs/decisions/`. If a tech enters Trial, update `lab/tech-radar.md` in the project's PR.
+For the intended core stack (ingestion, storage, transformation, orchestration, serving), state the market signal of each choice in one line: job-market demand and adoption. Sources: vault `08 - Research/Market Signals 2026.md` and `lab/tech-radar.md`; check current signals (web) when a tech is not there. A niche choice needs an explicit reason Tomas accepts — it becomes an ADR in the project's `docs/decisions/`. If a tech enters Trial, update `lab/tech-radar.md` in the lab PR of step 4.
 
-## 2. Issue and branch
+## 2. Local repository from the template
 ```bash
-git switch dev && git pull --ff-only
-gh label create "project:$NAME" --color 0E8A16 --description "Project $NAME" 2>/dev/null || true
-URL=$(gh issue create --title "feat($NAME): bootstrap project" \
-  --label "type:feat,project:$NAME" \
-  --body "Bootstrap \`projects/$NAME\` from the template. Pitch: $PITCH") || { echo "issue creation failed"; exit 1; }
-ISSUE=${URL##*/}
-[[ "$ISSUE" =~ ^[0-9]+$ ]] || { echo "unexpected gh output: $URL"; exit 1; }
-git switch -c "feat/$ISSUE-$NAME-bootstrap"
-```
-
-## 3. Copy and rename
-```bash
-rsync -a --exclude .venv --exclude .pytest_cache --exclude .ruff_cache --exclude uv.lock \
-  projects/_template/ "projects/$NAME/"
-mv "projects/$NAME/src/template_project" "projects/$NAME/src/$PKG"
-grep -rl --exclude-dir=.venv -e template-project -e template_project -e '# Project Name' "projects/$NAME" \
+NAME=<name>; PKG="${NAME//-/_}"
+LAB="$HOME/Data Engineering/Claude Code Enviroment"; DEST="$HOME/Data Engineering/Proyectos Data/$NAME"
+git -C "$LAB" fetch -q origin dev
+mkdir -p "$DEST" && git -C "$LAB" archive origin/dev template | tar -x -C "$DEST" --strip-components=1   # tracked files of dev only
+cd "$DEST" || exit 1
+[[ "$PWD" == */Proyectos\ Data/"$NAME" ]] || { echo "not in the new project folder: $PWD"; exit 1; }
+rm -f uv.lock
+mv "src/template_project" "src/$PKG"
+grep -rl -e template-project -e template_project -e '# Project Name' . \
   | xargs perl -pi -e "s/template-project/$NAME/g; s/template_project/$PKG/g; s/^# Project Name\$/# $NAME/; s/^# Project Name — /# $NAME — /"
 ```
-Then fill the placeholders with the Edit tool (not sed — the pitch may contain `/`, `&` or `|`):
-- `projects/$NAME/README.md`: the `> One-sentence pitch...` line → `> $PITCH`.
-- `projects/$NAME/pyproject.toml`: `description = "..."` → the pitch.
-- `projects/$NAME/src/$PKG/__init__.py`: docstring → `"""$NAME: <pitch>."""`.
+Add the folder to the session (`request_directory` with `$DEST`), then fill the placeholders with the Edit tool (not sed — the pitch may contain `/`, `&` or `|`):
+- `README.md`: the `> One-sentence pitch...` line → `> $PITCH`.
+- `pyproject.toml`: `description = "..."` → the pitch.
+- `src/$PKG/__init__.py`: docstring → `"""$NAME: <pitch>."""`.
 
 ```bash
-(cd "projects/$NAME" && uv sync && uv run pytest && uv run ruff check .)
+cd "$HOME/Data Engineering/Proyectos Data/<name>" || exit 1
+uv sync && uv run pytest && uv run ruff check . && uv run ruff format --check .
 ```
-All three must pass before continuing.
+All must pass before continuing.
 
-## 4. Register
-- Append a row to the `## Projects` table in the root `README.md` (escape `|` in the pitch as `\|`): `| [$NAME](projects/$NAME/) | $PITCH | TBD | 🌱 bootstrapped |`.
-- Create the vault note from `09 - Templates/Project Template.md` (fill Problem/Goal from the pitch; add the repo path) and version it:
+## 3. GitHub repository (public — get Tomas's OK first)
+Creating a public repository is a public action: state the name and visibility and wait for his OK.
 ```bash
-VAULT="$HOME/Data Engineering/Second Brain"
+NAME=<name>; cd "$HOME/Data Engineering/Proyectos Data/$NAME" || exit 1
+[[ ! -e .git ]] || { echo "already a git repository: $PWD"; exit 1; }
+git init -q -b main && pre-commit install && git add -A
+# The one commit made directly on main: there is no history to protect yet. Every other hook runs —
+# gitleaks must scan the first commit before it becomes public.
+SKIP=no-commit-to-branch git commit -q -m "chore: bootstrap from the Data Engineering Lab template" || exit 1
+git branch dev
+gh repo create "TomasRipsky/$NAME" --public --disable-wiki --description "<pitch>" --source . --remote origin
+git push -q -u origin main dev && git switch -q dev
+gh api -X PATCH "repos/TomasRipsky/$NAME" -f default_branch=dev -F allow_rebase_merge=false -F delete_branch_on_merge=true -q .default_branch
+# same branch protection and labels as the lab
+for id in $(gh api repos/TomasRipsky/data-engineering-lab/rulesets -q '.[].id'); do
+  gh api "repos/TomasRipsky/data-engineering-lab/rulesets/$id" -q '{name,target,enforcement,conditions,rules,bypass_actors}' \
+    | gh api -X POST "repos/TomasRipsky/$NAME/rulesets" --input - -q '"ruleset \(.name): \(.enforcement)"'
+done
+gh label clone TomasRipsky/data-engineering-lab -R "TomasRipsky/$NAME" -f
+gh label list -R "TomasRipsky/$NAME" --limit 200 --json name -q '.[].name' | grep -v '^type:' | while read -r l; do gh label delete "$l" -R "TomasRipsky/$NAME" --yes; done
+gh repo view "TomasRipsky/$NAME" --json url,defaultBranchRef,visibility
+```
+`ci` runs on every pull request from the first one. Cloud wiring (GitHub Environments, Workload Identity Federation bound to **this repository's numeric ID**, Pages with a workflow build) comes with the project's design, not here — pitwall's `infra/gcp/iam.tf` and `make gh-vars` are the reference.
+
+## 4. Register in the lab (a lab PR, through `ship`)
+From the lab checkout: issue `chore(lab): register <name>` → branch from `dev` →
+- a row in the `## Projects` table of `README.md`, linking the repository URL (the `world-status` hook reads this table): `| [$NAME](https://github.com/TomasRipsky/$NAME) | $PITCH | TBD | 🌱 bootstrapped |` (escape `|` in the pitch as `\|`);
+- a card in `site/index.html` once the project has a public site (not before);
+- `lab/tech-radar.md` if step 1b moved a tech.
+
+Then the vault note from `09 - Templates/Project Template.md` (Problem/Goal from the pitch; repository URL and local path):
+```bash
+NAME=<name>; VAULT="$HOME/Data Engineering/Second Brain"; cd "$VAULT" || exit 1
 # write "$VAULT/07 - Laboratory/$NAME.md" with the Write tool, then:
 git -C "$VAULT" add "07 - Laboratory/$NAME.md" && git -C "$VAULT" commit -m "docs: add $NAME project note" && git -C "$VAULT" push
 ```
 
-## 5. Commit and PR
-```bash
-git add "projects/$NAME" README.md
-git commit -m "feat($NAME): bootstrap project from template"
-git push -u origin HEAD
-gh pr create --base dev --title "feat($NAME): bootstrap project" --body "Closes #$ISSUE"
-```
-Merge per `CLAUDE.md` (CI green + `pr-reviewer` for non-trivial changes, then squash-merge into `dev` and verify the issue closed).
-
-## 6. Next
-The project's design starts with brainstorming; its spec and plans go to `projects/$NAME/docs/design/{specs,plans}/`. `docs/guide.md` is filled during the tutor reviews as the project is built.
+## 5. Next
+The project's design starts with brainstorming; its spec and plans go to `docs/design/{specs,plans}/` **in the project repository**, its decisions to `docs/decisions/`. `docs/guide.md` is filled during the tutor reviews as the project is built. Every change there follows the same flow as here — issue → branch from `dev` → PR → `ship` run against that repository. When a project teaches something reusable, improve `template/` in the lab.

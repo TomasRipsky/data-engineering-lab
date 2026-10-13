@@ -13,7 +13,7 @@ Closes #
 
 ## Checklist
 - [ ] Branch follows `<type>/<issue#>-<slug>`
-- [ ] Commits follow Conventional Commits with project scope
+- [ ] Commits follow Conventional Commits with scope `lab` or `agent`
 - [ ] Docs updated: README, `docs/guide.md` (how it works), ADRs for decisions made
 - [ ] Second-brain notes updated for new concepts (or n/a)
 - [ ] No secrets, no billable resources left running

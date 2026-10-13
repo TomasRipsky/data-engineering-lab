@@ -1,6 +1,6 @@
 # 0005 — One lab site with a shared design
 
-- **Status:** Accepted
+- **Status:** Superseded by [0007](0007-one-repository-per-project.md) (2026-10-13) — the export contract and the shared look live on in `template/site/`
 - **Date:** 2026-09-30
 
 ## Context

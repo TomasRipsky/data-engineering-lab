@@ -23,12 +23,16 @@ Every logical block of work (2–4 related tasks) follows the same loop:
 
 The full protocol and the vault note standard: [`tutoring.md`](tutoring.md).
 
+## Where I work
+
+The lab is my base ([lab ADR 0007](../lab/adr/0007-one-repository-per-project.md)). Every project is its own repository, cloned next to the lab; a session starts here — where the rules, skills, hooks and memory are — and adds the project's clone as a working directory. Project repositories carry no copy of this machinery, only a short `CLAUDE.md` that points back. Skills name the repository they act on.
+
 ## Memory
 
 Three tiers ([lab ADR 0004](../lab/adr/0004-three-tier-memory-architecture.md)) — keep each better, not bigger:
 
 - **Hot — Claude's file memory** (outside the repo): Tomas's preferences, agreements, project states. Its index is loaded in every session and stays ≤ ~40 lines (ADR 0004): one line per memory, details in the files. Consolidated at retros.
-- **Warm — this repo:** `CLAUDE.md`, `agent/`, `lab/` (conventions, ADRs, designs), project docs and git history.
+- **Warm — the repositories:** here `CLAUDE.md`, `agent/`, `lab/` (conventions, ADRs, designs) and git history; in each project repository its README, guide, decisions and designs.
 - **Deep — the Obsidian second brain** (private repo): concepts and technologies explained with our own cases, project notes, private ideas.
 
 graphify (a Claude Code skill) builds a knowledge graph over the repo and the vault. It is a derived index, never the source of truth; I use it (incrementally) when it saves tokens without losing context.
@@ -53,13 +57,13 @@ The premise is **the highest possible quality while containing cost**, so the pa
 
 | Tool | Kind | What it does | Where |
 |---|---|---|---|
-| `new-project` | skill | Bootstraps a project: issue, branch, template copy, industry-standard check, registration, PR | [.claude/skills/new-project/](../.claude/skills/new-project/SKILL.md) |
-| `pr-reviewer` | agent | Independent read-only review of a PR before merging, with ranked findings | [.claude/agents/pr-reviewer.md](../.claude/agents/pr-reviewer.md) |
+| `new-project` | skill | Bootstraps a project as its own repository from `template/`: industry-standard check, local clone, public repository with rulesets and labels, registration in the lab | [.claude/skills/new-project/](../.claude/skills/new-project/SKILL.md) |
+| `pr-reviewer` | agent | Independent read-only review of a PR of the lab or of a project repository before merging, with ranked findings | [.claude/agents/pr-reviewer.md](../.claude/agents/pr-reviewer.md) |
 | `reviewer-bash-allowlist` | hook | Restricts the reviewer's Bash to inspection commands | [.claude/hooks/](../.claude/hooks/reviewer-bash-allowlist.sh) |
-| `ship` | skill | Branch → PR → CI → review → squash merge → issue closed → memory updated | [.claude/skills/ship/](../.claude/skills/ship/SKILL.md) |
+| `ship` | skill | Branch → PR → CI → review → squash merge → issue closed → memory updated, in the lab or in a project repository | [.claude/skills/ship/](../.claude/skills/ship/SKILL.md) |
 | `release` | skill (Tomas only) | Changelogs → `dev → main` merge commit → GitHub release; runs only when Tomas types `/release X.Y.Z` | [.claude/skills/release/](../.claude/skills/release/SKILL.md) |
 | `verify-before-design` | skill | Verified-facts checklist before designing cloud, auth, CI or pinned versions | [.claude/skills/verify-before-design/](../.claude/skills/verify-before-design/SKILL.md) |
-| `world-status` | hook | At session start: branch, open issues and PRs, last pipeline run | [.claude/hooks/world-status.sh](../.claude/hooks/world-status.sh) |
+| `world-status` | hook | At session start: branch, stale rules, open issues and PRs, and one line per project repository (issues, PRs, last run) | [.claude/hooks/world-status.sh](../.claude/hooks/world-status.sh) |
 | deny rules | settings | Block reading the secret patterns `.gitignore` blocks | [.claude/settings.json](../.claude/settings.json) |
 
 ## Files here

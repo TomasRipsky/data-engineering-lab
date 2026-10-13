@@ -5,6 +5,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-13
+
+### Changed
+- **The lab is my base and every project is its own repository** ([lab ADR 0007](../lab/adr/0007-one-repository-per-project.md)): sessions start here and add the project's clone as a working directory. `new-project` creates a repository from `template/` (local clone, public repository, rulesets, labels) instead of a folder; `ship`, `release` and `pr-reviewer` act on a named target repository and every shell block starts with an explicit `cd`.
+- **`world-status` reports each project repository** listed in the README's Projects table (owner-only issue and PR titles, last non-PR workflow run) instead of one hard-coded pipeline.
+- **`ship` stops on "no checks reported" where a workflow listens to `pull_request`**: it passes only in a repository with no pull-request CI at all (the lab). `new-project` runs gitleaks on the first commit before it becomes public, and every block has a guarded `cd` (review of #61).
+- **Secret deny rules cover project clones** (`~/Data Engineering/Proyectos Data/**`): project-settings rules are anchored at the lab root.
+- **New lessons** from the pitwall extraction: IAM propagation, `.gitignore` of the destination, folder-anchored rules, rewrite-then-adapt.
+- **Session start names stale rules** (`world-status` hook): skills and CLAUDE.md load from the checked-out branch, and a branch forked before #55 ran the old `ship` gate during the CityPulse v2.0.1 release.
+- **Destructive operations run from a reviewed target list; long local jobs run awake and with timeouts** (CityPulse rebuild): see `agent/lessons.md`.
+- **`ship` works in repos whose default branch is not `dev`** (CityPulse): GitHub links `Closes #n` only into the default branch, so the link gate applies only when `dev` is the default; the base must be `dev`, the body must name the issue, and the issue is closed explicitly after the merge if it is still open.
+- **Tutor reviews end with a plain-language summary and are written into the project guide at chat depth** (Tomas, pitwall tutoring): details give understanding, the summary gives retention, and the guide outlives the deleted conversation. `agent/tutoring.md`, CLAUDE.md, `projects/_template/docs/guide.md`.
+- **External-data checks are verified against the oldest data loaded, and each clause of a behaviour gets a test that bites** (`lab/conventions.md`): #48 proved "no false warnings" on one season's recordings only, and its first test passed with the guard removed.
+- **Review findings become issues the same day** (`agent/tutoring.md`): the Retry-After bug (#44) sat only in a vault note.
+- **`ship` is mandatory for every PR into `dev`** (CLAUDE.md), even when the prompt dictates the steps: in #44 the manual flow missed its pending-CI rule.
+- **`ship`: the issue-link check is a gate inside the merge step.** Right after PR creation GitHub may not have computed the link yet (false "not linked"), and an advisory STOP in an earlier step was ignored by a scripted run during the v1.0.0 release.
+- **Closing pass before a conversation ends** (CLAUDE.md): Tomas deletes finished conversations, so decisions, lessons, state and the next step are persisted before a milestone closes.
+
 ## [1.0.0] - 2026-09-30
 
 ### Added

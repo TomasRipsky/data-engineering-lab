@@ -1,0 +1,19 @@
+## Summary
+<!-- What changes and why, in 1–3 sentences. -->
+
+Closes #
+
+## How it was tested
+- [ ] `make test`
+- [ ] `make lint`
+- [ ] Manual check:
+
+## Why / what I learned
+<!-- Decision → alternatives rejected → underlying concept. Link ADRs or second-brain notes. -->
+
+## Checklist
+- [ ] Branch follows `<type>/<issue#>-<slug>`
+- [ ] Commits follow Conventional Commits (scope = component, optional)
+- [ ] Docs updated: README, `docs/guide.md` (how it works), ADRs for decisions made
+- [ ] Second-brain notes updated for new concepts (or n/a)
+- [ ] No secrets, no billable resources left running

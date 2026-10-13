@@ -1,6 +1,6 @@
 # 0001 — Monorepo with self-contained projects
 
-- **Status:** Accepted
+- **Status:** Superseded by [0007](0007-one-repository-per-project.md) (2026-10-13)
 - **Date:** 2026-09-29
 
 ## Context
