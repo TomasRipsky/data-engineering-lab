@@ -32,6 +32,7 @@ Releases and PRs into `main` need Tomas's explicit OK.
 - Python ≥ 3.12. Each project has its own `pyproject.toml` in its own repository.
 - One test per clause of a behaviour (*every* vs *some*, empty input, required vs optional), each shown to bite: break the guarded line once and watch that test go red.
 - A check on the shape of external data is verified against the oldest data the pipeline loads (one live request per old season or partition), not only against the recorded fixtures.
+- Logic that reads free text from a source (messages, statuses, categories) is verified against the **newest** data too, and gets two guards: a warning for values it does not know, and a warning on the effect a missed value would have (a total or a share that becomes implausible).
 
 ## SQL
 
@@ -50,6 +51,16 @@ Releases and PRs into `main` need Tomas's explicit OK.
 - Configuration comes from environment variables; `.env.example` documents them and is the only env file committed.
 - Library and cloud APIs change fast: check the current docs (Context7 MCP, `.mcp.json`) before relying on memory.
 
+## Showcase site
+
+Every project is shown with **a story page and a BI page** (lab ADR 0008), built with Observable Framework from `template/site/`.
+
+- **Story** (`index.md`): sticky bar → illustrated hero with live numbers → the answers on tiles from the domain → one section per question (what you are looking at → chart → its limits) → a case file chosen by a query → the pipeline drawn in the domain's language → decisions → quality → limits → run it.
+- **BI** (`bi.md`): filter bar, KPIs, tables and charts per subject, CSV downloads, an empty state for every block.
+- What the site reads is decided in dbt report models (`rpt_*`, one grain each, tested); the export only copies them; every number is computed from those rows in the page.
+- `components/lab.css` and `lab.js` are the shared skeleton; the project's stylesheet brings the personality of its domain. Charts follow the `dataviz` skill; illustrations are original; no third-party requests.
+- The full rules: `template/site/README.md`. The project also gets a card on the lab's hub (`site/index.html`).
+
 ## Docs — one question, one place
 
 | Question | Place |
@@ -61,6 +72,7 @@ Releases and PRs into `main` need Tomas's explicit OK.
 | Why did we decide X (lab)? | `lab/adr/` |
 | Which tech are we watching or avoiding? | `lab/tech-radar.md` |
 | What does a new project start as? | `template/` |
+| What must a project's site look like? | `template/site/README.md` (lab ADR 0008) |
 | Which projects exist, where is each site? | `README.md` Projects table, `site/index.html` (the hub) |
 | What does a project do, how do I run it? | the project repository's `README.md` |
 | How does it work inside? | its `docs/guide.md` |
