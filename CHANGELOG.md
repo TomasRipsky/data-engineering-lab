@@ -5,6 +5,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+### Changed
+- **One repository per project; the lab is the base** ([lab ADR 0007](lab/adr/0007-one-repository-per-project.md), superseding ADRs 0001 and 0005). `pitwall` moved with its history to [TomasRipsky/pitwall](https://github.com/TomasRipsky/pitwall): its code, infrastructure, docs, CI/CD and dashboard now live and are released there. This repository's history and the tags v0.1.0–v1.0.0 still contain it.
+- `projects/_template/` became [`template/`](template/): a complete standalone repository (git hygiene, issue and PR templates, Dependabot, a `ci` workflow, changelog, a `CLAUDE.md` pointer to the lab and a site skeleton with the shared look).
+- The lab site is a static portfolio hub (`site/index.html`, deployed by `lab-site` on pushes to `main`): one card per project — pitwall, CityPulse, MarineFlow — each linking to the project's own site.
+
+### Added
+- Redirects from the old dashboard URLs (`/data-engineering-lab/pitwall/…`) to https://tomasripsky.github.io/pitwall/.
+
+### Removed
+- `projects/pitwall/`, the `pitwall-ci` and `pitwall-pipeline` workflows, the Observable Framework site and its npm dependencies. A release of the lab no longer touches any production system.
+
 ## [1.0.0] - 2026-09-30
 
 ### Changed

@@ -1,7 +1,7 @@
 ---
 name: Feature
 about: New capability or project work
-title: "feat(<project>): "
+title: "feat(lab): "
 labels: ["type:feat"]
 ---
 

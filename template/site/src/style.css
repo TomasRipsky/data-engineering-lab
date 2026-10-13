@@ -1,0 +1,16 @@
+/* Default theme: Framework's light look + the shared lab rules. Give the project its own theme —
+   swap the Framework theme, set its colours — so its domain is obvious at a glance. */
+@import url("observablehq:default.css");
+@import url("observablehq:theme-air.css");
+@import url("./components/lab.css");
+
+:root {
+  --lab-accent: #2a9d8f;
+  --lab-ink: #264653;
+  --theme-foreground-focus: var(--lab-accent);
+  --serif: system-ui, -apple-system, "Segoe UI", sans-serif; /* no web-font requests */
+}
+
+.big {
+  color: var(--lab-ink);
+}

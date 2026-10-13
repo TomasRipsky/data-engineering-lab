@@ -1,0 +1,59 @@
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+.coverage
+htmlcov/
+
+# Secrets & credentials — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*credentials*.json
+*service-account*.json
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+.envrc
+*.p8
+*.p12
+*.pfx
+kubeconfig
+.databrickscfg
+# dbt: commit profiles.yml.example that uses env_var(); never the real one
+profiles.yml
+
+# Terraform (keep .terraform.lock.hcl committed)
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Local data (anchored: nested src/<pkg>/data or tests/data stay tracked)
+/data/
+*.duckdb
+*.duckdb.wal
+
+# Tools
+graphify-out/
+.claude/settings.local.json
+
+# Site (Observable Framework)
+site/node_modules/
+site/dist/
+site/src/.observablehq/cache/
+# exported by `make site-data` before the build; never committed
+site/src/data/

@@ -1,6 +1,6 @@
 # 0006 — World and countries structure
 
-- **Status:** Accepted
+- **Status:** Accepted — amended by [0007](0007-one-repository-per-project.md) (2026-10-13): the countries are repositories, `projects/` became `template/`, `site/` is the hub
 - **Date:** 2026-09-30
 
 ## Context
