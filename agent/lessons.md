@@ -73,14 +73,14 @@ Lessons learned the hard way, each turned into a rule that prevents it. A lesson
 - **Symptom:** moving pitwall's historical plans under `projects/pitwall/` made the `ruff-format` pre-commit hook rewrite 160+ lines of Python code blocks inside them, and the commit failed.
 - **Cause:** ruff ≥ 0.16 formats Python blocks in Markdown and resolves its settings from the nearest `pyproject.toml` — the moved files inherited pitwall's `line-length = 100`. A rename counts as a changed file, so the hook ran on them.
 - **Rule:** before a move, ask which tools resolve configuration by location (ruff, dbt, Terraform, pytest). Keep moves and edits in separate commits so git still detects the rename. Records (specs, plans) are excluded from formatters.
-- **Applied in:** ruff config of every project (`extend-exclude = ["docs/design"]` in `projects/*/pyproject.toml`, so `make lint` and pre-commit agree) and a root `ruff.toml` for `lab/design` — one place per scope, honoured by `make lint`, `ruff` and pre-commit alike; lab ADR 0006.
+- **Applied in:** ruff config of every project (`extend-exclude = ["docs/design"]` in each project's `pyproject.toml`, so `make lint` and pre-commit agree) and a root `ruff.toml` for `lab/design` — one place per scope, honoured by `make lint`, `ruff` and pre-commit alike; lab ADR 0006.
 - **Follow-up:** the first fix lived only in pre-commit, so `make lint` still failed; the reviewer then found the lab-level exclude had the same flaw. Exclude in the *tool's* config, not in one caller of the tool.
 
 ### A condensed guide loses what made the explanation work
 - **Symptom:** the first pitwall guide section was a terse English digest of a much richer chat review; Tomas liked the chat version and asked whether it was being kept.
 - **Cause:** I treated the guide as a summary of the review, while conversations are deleted — the chat was the only copy of the depth.
 - **Rule:** the guide carries the review at full depth (flow, mechanisms, tables, alternatives, failure modes), plus a closing plain-language **In short** for retention.
-- **Applied in:** `agent/tutoring.md` steps 3–4, CLAUDE.md tutoring step 3, `projects/_template/docs/guide.md`.
+- **Applied in:** `agent/tutoring.md` steps 3–4, CLAUDE.md tutoring step 3, `template/docs/guide.md`.
 
 ### An expert-level explanation of a tool he never used
 - **Symptom:** in the pitwall tutoring, the explanation of `tests/fixtures/` (pytest fixtures, `httpx.MockTransport`, transport layer, record/replay) was "useless" to Tomas.
@@ -135,3 +135,27 @@ Lessons learned the hard way, each turned into a rule that prevents it. A lesson
 - **Cause:** skills, hooks and CLAUDE.md are read from the lab checkout's current branch; the session sat on `docs/43-pitwall-guide`, forked before #55, so it ran the old `ship`.
 - **Rule:** at session start, any rule file that `origin/dev` changed since the branch forked is named; read those from `origin/dev` (or merge `dev` in) before following them.
 - **Applied in:** `.claude/hooks/world-status.sh` (with a regression test).
+
+### IAM changes are not instant
+- **Symptom:** the first CI run of the new pitwall repository failed in 12–20 s with `iam.serviceAccounts.getAccessToken denied`, one minute after `terraform apply` had rebound Workload Identity Federation. Re-running the same jobs unchanged passed.
+- **Cause:** IAM bindings take up to a few minutes to propagate; the token exchange already accepted the new repository while the service-account binding was not yet effective.
+- **Rule:** after an apply that changes IAM, a cloud-auth job that fails within seconds is re-run once before debugging; for production, apply first and let the PR's own CI time pass before the push that triggers the pipeline.
+- **Applied in:** `ship` step 4.
+
+### Local-only files are protected by the destination's .gitignore, not the source's
+- **Symptom:** after extracting pitwall with `git filter-repo`, the Terraform state moved into the new clone showed up as *untracked*, one `git add -A` away from a public repository.
+- **Cause:** the rules that ignored it lived in the monorepo's root `.gitignore`, which is not part of the extracted paths.
+- **Rule:** when files move to another repository, write that repository's `.gitignore` before moving any local-only file into it, and check `git status --ignored` before the first `git add`.
+- **Applied in:** `template/.gitignore` (every new repository starts with the full rules); the extraction plan (`lab/design/plans/2026-10-13-repo-per-project.md`).
+
+### Rules anchored to a folder do not follow the work
+- **Symptom:** the secret deny rules (`Read(/**/.env)`…) silently stopped covering project files once projects moved out of the lab.
+- **Cause:** in project settings a leading `/` anchors at the primary working directory, not at the filesystem root; sibling clones are outside it. The same anchoring is why the Bash tool's directory resets outside the session's folders.
+- **Rule:** when work moves to another directory, re-read how each guard resolves paths (permissions docs, hook `cd`, skill blocks) instead of assuming it travels; every skill block names its repository with an explicit `cd`.
+- **Applied in:** `.claude/settings.json` (rules repeated for `~/Data Engineering/Proyectos Data/**`), `ship`, `release`, `new-project`, `pr-reviewer`.
+
+### Rewrite history and change behaviour in separate steps
+- **Symptom:** none — recorded because it is what made the pitwall extraction checkable.
+- **Cause:** a history rewrite cannot be reviewed as a diff; mixed with real changes, nobody can tell a lost file from an intended edit.
+- **Rule:** the rewrite only moves paths and is verified by `diff -r` against the source (zero differences per branch); everything that changes behaviour is an ordinary PR on top. Issue references in rewritten messages are requalified with a non-linking form (`repo#N`), never `owner/repo#N`, which would cross-link and could close issues in the source repository.
+- **Applied in:** `lab/design/specs/2026-10-13-repo-per-project-design.md` §3.1.

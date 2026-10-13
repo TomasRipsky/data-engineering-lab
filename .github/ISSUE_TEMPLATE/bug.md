@@ -1,7 +1,7 @@
 ---
 name: Bug
 about: Something behaves differently than expected
-title: "fix(<project>): "
+title: "fix(lab): "
 labels: ["type:fix"]
 ---
 

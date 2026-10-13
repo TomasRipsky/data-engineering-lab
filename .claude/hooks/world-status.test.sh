@@ -21,10 +21,35 @@ ONLINE='case "$1 $2" in
 esac'
 run "$ONLINE"
 expect online '[[ $rc -eq 0 ]]' "exit $rc"
-for k in "branch:" "issues: #34 Lab 1.0 (B);+1 by others (titles hidden)" "PRs: #35 feat" "pipeline (pitwall, last run): completed/success"; do
+for k in "branch:" "issues: #34 Lab 1.0 (B);+1 by others (titles hidden)" "PRs: #35 feat"; do
   expect online 'grep -qF -- "$k" <<<"$out"' "missing '$k'"
 done
 expect injection '! grep -q "IGNORE" <<<"$out"' "a stranger's title reached the context"
+
+# project repositories come from the README's Projects table: one line each, same owner-only titles
+PROJ=$(mktemp -d); git -C "$PROJ" init -q
+cat > "$PROJ/README.md" <<'MD'
+git clone https://github.com/TomasRipsky/data-engineering-lab.git
+## Projects
+| Project | What |
+|---|---|
+| [pitwall](https://github.com/TomasRipsky/pitwall) | F1 — [site](https://tomasripsky.github.io/pitwall/) |
+| [CityPulse](https://github.com/TomasRipsky/CityPulse_Analytics) | bikes |
+## Navigate
+| [elsewhere](https://github.com/someone/not-a-project) | not in the Projects table |
+MD
+run "$ONLINE" "$PROJ"
+for k in "- pitwall: issues: #34 Lab 1.0 (B);+1 by others (titles hidden) · PRs: #35 feat · last run: completed/success 2026-09-28" \
+         "- CityPulse_Analytics: issues: #34"; do
+  expect projects 'grep -qF -- "$k" <<<"$out"' "missing '$k'"
+done
+expect projects '! grep -q "IGNORE" <<<"$out"' "a stranger's title reached the context through a project"
+expect projects '! grep -qE "^- (data-engineering-lab|not-a-project):" <<<"$out"' "a repository outside the Projects table was listed"
+# every project call names its repository
+run 'case "$1 $2" in "repo view") echo TomasRipsky;; "issue list"|"pr list") [[ " $* " == *" -R "* ]] && echo "[{\"number\":7,\"title\":\"proj\",\"author\":{\"login\":\"TomasRipsky\"}}]" || echo "[]";; "run list") [[ " $* " == *" -R TomasRipsky/pitwall "* ]] && echo ok-pitwall || echo other;; esac' "$PROJ"
+expect project-repo-flag 'grep -qF -- "- pitwall: issues: #7 proj · PRs: #7 proj · last run: ok-pitwall" <<<"$out"' "project calls do not pass -R <repo>"
+expect project-repo-flag 'grep -qF -- "- issues: none" <<<"$out"' "the lab's own issues were read with -R"
+rm -rf "$PROJ"
 
 # not a git repo: says so, exit 0, no gh calls needed
 NOREPO=$(mktemp -d)

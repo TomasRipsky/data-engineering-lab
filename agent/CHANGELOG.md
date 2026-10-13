@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Changed
+- **The lab is my base and every project is its own repository** ([lab ADR 0007](../lab/adr/0007-one-repository-per-project.md)): sessions start here and add the project's clone as a working directory. `new-project` creates a repository from `template/` (local clone, public repository, rulesets, labels) instead of a folder; `ship`, `release` and `pr-reviewer` act on a named target repository and every shell block starts with an explicit `cd`.
+- **`world-status` reports each project repository** listed in the README's Projects table (owner-only issue and PR titles, last non-PR workflow run) instead of one hard-coded pipeline.
+- **Secret deny rules cover project clones** (`~/Data Engineering/Proyectos Data/**`): project-settings rules are anchored at the lab root.
+- **New lessons** from the pitwall extraction: IAM propagation, `.gitignore` of the destination, folder-anchored rules, rewrite-then-adapt.
 - **Session start names stale rules** (`world-status` hook): skills and CLAUDE.md load from the checked-out branch, and a branch forked before #55 ran the old `ship` gate during the CityPulse v2.0.1 release.
 - **Destructive operations run from a reviewed target list; long local jobs run awake and with timeouts** (CityPulse rebuild): see `agent/lessons.md`.
 - **`ship` works in repos whose default branch is not `dev`** (CityPulse): GitHub links `Closes #n` only into the default branch, so the link gate applies only when `dev` is the default; the base must be `dev`, the body must name the issue, and the issue is closed explicitly after the merge if it is still open.
