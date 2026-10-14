@@ -1,16 +1,35 @@
-/* Default theme: Framework's light look + the shared lab rules. Give the project its own theme —
-   swap the Framework theme, set its colours — so its domain is obvious at a glance. */
+/* template-project — the theme. Structure comes from components/lab.css (the showcase skeleton
+   every lab project shares, lab ADR 0008); this file sets its --lab-* variables and adds what
+   belongs only to this project's domain: its hero illustration, its answer tiles, its section
+   markers. Give the project a personality that says its subject at a glance (pitwall: a pit wall
+   at night, start lights, pit boards; CityPulse: New York at night, street signs, subway bullets).
+   Validate data colours with the dataviz skill against --lab-bg before using them. */
 @import url("observablehq:default.css");
-@import url("observablehq:theme-air.css");
+@import url("observablehq:theme-near-midnight.css");
 @import url("./components/lab.css");
 
 :root {
+  --lab-bg: #101014;
+  --lab-bg-alt: #16161c;
+  --lab-panel: #1c1c24;
+  --lab-line: #2c2c38;
+  --lab-ink: #f0f0f0;
+  --lab-soft: #c9c9d6;
+  --lab-muted: #a3a3b3;
   --lab-accent: #2a9d8f;
-  --lab-ink: #264653;
-  --theme-foreground-focus: var(--lab-accent);
-  --serif: system-ui, -apple-system, "Segoe UI", sans-serif; /* no web-font requests */
+  --lab-accent-ink: #0b0b10;
+  --lab-accent-text: #5cc8ba;
+  --lab-series-1: #3987e5;
+  --lab-series-2: #d95926;
+  --lab-series-3: #2aa198;
+  color-scheme: dark;
 }
 
-.big {
-  color: var(--lab-ink);
-}
+/* section markers: replace with something from the domain */
+.num { flex: none; display: inline-grid; place-items: center; min-width: 2.2rem; height: 2.2rem; border-radius: 50%; background: var(--lab-accent); color: var(--lab-accent-ink); font: 800 0.95rem/1 var(--lab-display); }
+
+/* the answers: replace .answer with tiles drawn from the domain (pit boards, street signs…) */
+.answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 1.3rem; }
+.answer { background: var(--lab-panel); border: 1px solid var(--lab-line); border-radius: var(--lab-radius); padding: 1.1rem 1.2rem 1.2rem; min-width: 0; }
+.answer b { display: block; font: 800 2.6rem/1 var(--lab-display); font-variant-numeric: tabular-nums; }
+.answer p { margin: 0.5rem 0 0; color: var(--lab-soft); font-size: 0.92rem; }

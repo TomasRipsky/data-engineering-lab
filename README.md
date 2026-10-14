@@ -48,6 +48,7 @@ The [portfolio hub](https://tomasripsky.github.io/data-engineering-lab/) also sh
 | Why a project made a decision | its `docs/decisions/` |
 | How a project was designed and planned | its `docs/design/` |
 | What a new project starts as | [template/](template/) |
+| What a project's site must look like | [template/site/README.md](template/site/README.md), [lab ADR 0008](lab/adr/0008-showcase-site-standard.md) |
 | The lab's rules | [lab/conventions.md](lab/conventions.md), [lab/security-and-cost.md](lab/security-and-cost.md) |
 | Why the lab is built this way | [lab/adr/](lab/adr/) |
 | Which tech we use, try, watch or avoid | [lab/tech-radar.md](lab/tech-radar.md) |

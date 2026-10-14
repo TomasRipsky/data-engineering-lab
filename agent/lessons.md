@@ -159,3 +159,27 @@ Lessons learned the hard way, each turned into a rule that prevents it. A lesson
 - **Cause:** a history rewrite cannot be reviewed as a diff; mixed with real changes, nobody can tell a lost file from an intended edit.
 - **Rule:** the rewrite only moves paths and is verified by `diff -r` against the source (zero differences per branch); everything that changes behaviour is an ordinary PR on top. Issue references in rewritten messages are requalified with a non-linking form (`repo#N`), never `owner/repo#N`, which would cross-link and could close issues in the source repository.
 - **Applied in:** `lab/design/specs/2026-10-13-repo-per-project-design.md` §3.1.
+
+### Free text from a source drifts: check the newest data, and guard the effect
+- **Symptom:** pitwall showed Monza 2026 with 51 of 53 laps under the Safety Car, and missed 19 Virtual Safety Car periods. It was live for weeks; nothing failed.
+- **Cause:** the model matched race-control messages by exact text. In 2026 the source reworded two ("VSC DEPLOYED" for "VIRTUAL SAFETY CAR DEPLOYED") and stopped sending red flags as flags at all — only "SESSION ABORTED". The model had been verified against the seasons that existed when it was written.
+- **Rule:** logic that reads free text is verified against the newest data as well as the oldest, and gets two warnings: one for values it does not know (in every category, not only the expected one), one for the effect a missed value would have (here: a race more than 60 % neutralised). The second catches the next rewording even if the first is fooled.
+- **Applied in:** `lab/conventions.md` (Python section), pitwall `int_neutralised_laps` and its two warning tests (pitwall#15).
+
+### "Pick the most extreme case" is a data test
+- **Symptom:** none — this is how the bug above was found. The showcase's case file asks the data for the race won from furthest back; the answer was a race whose numbers made no sense.
+- **Cause:** aggregates hide a broken record; a query for the maximum puts it on the front page.
+- **Rule:** every showcase has a case file chosen by a query, and its first answer is read with suspicion before it is published — an odd case is a bug until shown otherwise.
+- **Applied in:** lab ADR 0008, `template/site/src/index.md`.
+
+### Look at one real row before writing code that formats it
+- **Symptom:** the lap chart drew no lines and the team bars had no colour: a helper prefixed "#" to a colour that already had one, and an invalid colour is silently not drawn. A doc string claimed "hex, no leading hash" for the same column.
+- **Cause:** I wrote the encoder and the documentation from the column's name instead of from a value.
+- **Rule:** before writing a formatter, an encoder or a column description, print one real row. Silent fallbacks (an invalid colour, a NaN) are checked in the rendered output, not assumed away.
+- **Applied in:** pitwall `site/src/components/f1.js`, `_reports.yml`; the render-and-look step of every site change.
+
+### htl: a space before "/>" after an interpolated attribute
+- **Symptom:** an SVG path was rejected ("Expected path command … Z/") and a chequered flag rendered black.
+- **Cause:** in an htl template an unquoted `attr=${value}` runs to the next whitespace, so in `d=${path}/>` the slash becomes part of the value.
+- **Rule:** write `attr=${value} />`, and read the browser console after every build of a page — the chart still "rendered".
+- **Applied in:** `template/site/README.md` rule 8, pitwall `site/README.md`.

@@ -5,6 +5,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-14
+
+### Changed
+- **Showcase standard** ([lab ADR 0008](../lab/adr/0008-showcase-site-standard.md)): every project site is a story page and a BI page in its domain's personality, fed by dbt report models; CLAUDE.md and `lab/conventions.md` say so, and `template/site/` starts new projects with it.
+- **Free-text source logic is verified against the newest data and guarded twice** (`lab/conventions.md`), after pitwall's Safety Car periods silently broke on 2026 wording.
+- **New lessons**: the case file as a data test; look at a real row before formatting it; the htl `/>` trap.
+
 ## [2.0.0] - 2026-10-13
 
 ### Changed
